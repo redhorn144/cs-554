@@ -32,7 +32,7 @@ def GenPatches(nodes, centers, nodes_per_patch):
         # Find the nearest nodes to the center
         distances, indices = tree.query(center, k=nodes_per_patch)
         patches.append(indices)
-        radii.append(distances[-1])  # The radius is the distance to the farthest node in the patch
+        radii.append(distances[-1] * 1.5)  # Scale up so all nodes are well inside the support
         for ind in indices:
             if ind not in node_to_patch:
                 node_to_patch[ind] = []
@@ -46,23 +46,30 @@ def GenLocalPhi(nodes, patches, eps):
     for i, patch in enumerate(patches):
         Phi = GenPhi(nodes[patch], eps)
         matrices.append(Phi)
-    return matrices
+    return np.array(matrices)
 
-def GenLocalPhixk(nodes, patches, eps, k):
+def GenLocalDxk(nodes, patches, phis, eps, k):
     matrices = []
     for i, patch in enumerate(patches):
         Phixk = GenPhixk(nodes[patch], eps, k)
-        
-        matrices.append(Phixk)
-    return matrices
+        Dxk = np.linalg.solve(phis[i], Phixk.T).T
+        matrices.append(Dxk)
+    return np.array(matrices)
 
-def GenLocalLaplacian(nodes, patches, phis, eps):
+def GenLocalGrads(nodes, patches, phis, eps):
+    grad_matrices = []
+    for k in range(nodes.shape[1]):
+        grad_k = GenLocalDxk(nodes, patches, phis, eps, k)
+        grad_matrices.append(grad_k)
+    return np.array(grad_matrices).transpose(1, 0, 2, 3)
+
+def GenLocalLaps(nodes, patches, phis, eps):
     matrices = []   
     for i, patch in enumerate(patches):
         Lap = GenLaplacian(nodes[patch], eps)
         Lap = np.linalg.solve(phis[i], Lap.T).T
         matrices.append(Lap)
-    return matrices
+    return np.array(matrices)
 
 def GenLocalWeights(patches, matrices, f):
     weights = []
@@ -71,7 +78,7 @@ def GenLocalWeights(patches, matrices, f):
         #print(f"system size: {A.shape} for patch {i} with {len(f[patch])} nodes")
         w = np.linalg.solve(A, f[patch])
         weights.append(w)
-    return weights
+    return np.array(weights)
 
 def GenPhi(x, e):
     diff = x[:, np.newaxis, :] - x[np.newaxis, :, :]
@@ -117,5 +124,77 @@ def Interpolate(x, nodes, patches, centers, radii, local_weights, epsilon):
     local_values = np.array(local_values)
     return np.dot(weights, local_values) / np.sum(weights)
 
-def ApplyL(nodes):
-    for i in len()
+def ApplyLap(u, nodes, patches, centers, radii, grads, laps):
+    N = len(nodes)
+    d = nodes.shape[1]
+    Lapu = np.zeros(N)
+
+    # First pass: compute Shepard sum W, gradW, lapW at every node
+    W = np.zeros(N)
+    gradW = np.zeros((N, d))
+    lapW = np.zeros(N)
+
+    for patch_idx, patch in enumerate(patches):
+        for k, node_idx in enumerate(patch):
+            w = C2Weight(nodes[node_idx], centers[patch_idx], radii[patch_idx])
+            gw = C2WeightDerivatives(nodes[node_idx], centers[patch_idx], radii[patch_idx])
+            lw = C2WeightLaplacian(nodes[node_idx], centers[patch_idx], radii[patch_idx])
+            W[node_idx] += w
+            gradW[node_idx] += gw
+            lapW[node_idx] += lw
+
+    # Second pass: apply Laplacian with normalized PU weights
+    for patch_idx, patch in enumerate(patches):
+        lap_local = laps[patch_idx]
+        grad_local = grads[patch_idx]
+        u_local = u[patch]
+        Lu_local = lap_local @ u_local
+        gradu_local = np.array([grad_local[i] @ u_local for i in range(len(grad_local))])
+
+        for k, node_idx in enumerate(patch):
+            w = C2Weight(nodes[node_idx], centers[patch_idx], radii[patch_idx])
+            gw = C2WeightDerivatives(nodes[node_idx], centers[patch_idx], radii[patch_idx])
+            lw = C2WeightLaplacian(nodes[node_idx], centers[patch_idx], radii[patch_idx])
+
+            Wn = W[node_idx]
+            gWn = gradW[node_idx]
+            lWn = lapW[node_idx]
+
+            # Normalized weight and its derivatives via quotient rule
+            w_bar = w / Wn
+            gw_bar = gw / Wn - w * gWn / Wn**2
+            lw_bar = (lw / Wn
+                      - 2 * np.dot(gw, gWn) / Wn**2
+                      - w * lWn / Wn**2
+                      + 2 * w * np.dot(gWn, gWn) / Wn**3)
+
+            Lapu[node_idx] += lw_bar * u_local[k]
+            Lapu[node_idx] += 2 * np.dot(gw_bar, gradu_local[:, k])
+            Lapu[node_idx] += w_bar * Lu_local[k]
+
+    return Lapu
+
+def C2Weight(x, center, radius):
+    r = np.linalg.norm(x - center)/radius
+    return (1 - r)**4 * (4*r + 1)
+
+def C2WeightDerivatives(x, center, radius):
+    gradw = np.zeros_like(x)
+    r = np.linalg.norm(x - center)
+    if r == 0:
+        return gradw
+    rho = r/radius
+    factor = -20 * (1 - rho)**3 * rho / (radius * r)
+    for i in range(len(x)):
+        gradw[i] = factor * (x[i] - center[i])
+    return gradw
+
+def C2WeightLaplacian(x, center, radius):
+    d = len(x)
+    r = np.linalg.norm(x - center)
+    if r == 0:
+        return -20 * d / radius**2
+    rho = r/radius
+    psi_d = -20 * (1 - rho)**3 * rho 
+    psi_dd = 20*(1 - rho)**2 *(4*rho - 1)
+    return (psi_dd + (d - 1) * psi_d / rho) / radius**2
