@@ -1,0 +1,1015 @@
+--- PAGE 1 ---
+Journal of Computational Physics 331 (2017) 137–156
+Contents lists available at ScienceDirect
+Journal  of Computational  Physics
+www.elsevier.com/locate/jcp
+Stable  computations  with  ﬂat radial  basis  functions  using  
+vector-valued  rational  approximations
+Grady  B. Wrighta,∗, Bengt Fornbergb
+aDepartment  of Mathematics,  Boise State University,  Boise, ID 83725-1555,  USA
+bDepartment  of Applied  Mathematics,  University  of Colorado,  526 UCB, Boulder,  CO 80309, USA
+a r t i c l e i n f o a b s t r a c t
+Article history:
+Received  15 October  2016
+Accepted  21 November  2016
+Available  online 25 November  2016
+Keywords:
+RBF
+Shape parameter
+Ill-conditioningContour-Padé
+RBF-QRRBF-GA
+Rational
+ approximation
+Common  denominator
+RBF-FD
+RBF-HFDOne commonly  ﬁnds in applications  of smooth  radial basis functions  (RBFs)  that scaling  
+the kernels  so they are ‘ﬂat’ leads to smaller  discretization  errors.  However,  the direct 
+numerical  approach  for computing  with ﬂat RBFs (RBF-Direct)  is severely  ill-conditioned.  
+We present  an algorithm  for bypassing  this ill-conditioning  that is based on a new method  
+for rational  approximation  (RA) of vector-valued  analytic  functions  with the property  that 
+all components  of the vector share the same singularities.  This new algorithm  (RBF-RA)  is 
+more accurate,  robust,  and easier to implement  than the Contour-Padé  method,  which is 
+similarly  based on vector-valued  rational  approximation.  In contrast  to the stable RBF-QR  
+and RBF-GA  algorithms,  which are based on ﬁnding  a better conditioned  base in the same 
+RBF-space,  the new algorithm  can be used with any type of smooth  radial kernel,  and it is 
+also applicable  to a wider range of tasks (including  calculating  Hermite  type implicit  RBF-
+FD stencils).  We present  a series of numerical  experiments  demonstrating  the effectiveness  
+of this new method  for computing  RBF interpolants  in the ﬂat regime.  We also demonstrate  
+the ﬂexibility  of the method  by using it to compute  implicit  RBF-FD  formulas  in the ﬂat 
+regime  and then using these for solving  Poisson’s  equation  in a 3-D spherical  shell.
+©2016 Elsevier  Inc. All rights reserved.
+1. Introduction
+Meshfree  methods  based  on smooth  radial  basis functions  (RBFs)  are ﬁnding  increasing  use in scientiﬁc  computing  as 
+they combine  high order accuracy  with enormous  geometric  ﬂexibility  in applications  such as interpolation  and for numer-
+ically solving  PDEs. In these applications,  one ﬁnds that the best accuracy  is often achieved  when their shape  parameter  ε
+is small,  meaning  that they are relatively  ﬂat[1,2].
+The so called  Uncertainty  Principle,  formulated  in 1995[3], has contributed  to a widespread  misconception  that ﬂat 
+radial  kernels  unavoidably  lead to numerical  ill-conditioning.  This ‘principle’  mistakenly  assumes  that RBF interpolants  need 
+to be computed  by solving  the standard  RBF linear  system  (often  denoted  RBF-Direct).  However,  it has now been known  
+for over a decade[4–7]that the ill-conditioning  issue is speciﬁc  to this RBF-Direct  approach,  and that it can be avoided  
+using alternative  methods.  Three  distinctly  different  numerical  algorithms  have been presented  thus far in the literature  for 
+avoiding  this ill-conditioning  and thus open up the complete  range of εthat can be considered.  These  are the Contour-Padé
+(RBF-CP)  method [8], the RBF-QR  method [9–11], and the RBF-GA  method [12]. The present  paper  develops  a new stable  
+algorithm  that is in the same category  as RBF-CP.
+*Corresponding  author.
+E-mail addresses: gradywright@boisestate.edu (G.B. Wright),  fornberg@colorado.edu (B. Fornberg).
+http://dx.doi.org/10.1016/j.jcp.2016.11.0300021-9991/
+©2016 Elsevier  Inc. All rights reserved.
+
+--- PAGE 2 ---
+138 G.B. Wright, B. Fornberg / Journal of Computational Physics 331 (2017) 137–156
+Table 1
+Examples  of analytic  radial kernels  featuring  a shape-parameter  εthat the 
+RBF-RA  procedure  is immediately  applicable  to. The ﬁrst three kernels  are 
+positive-deﬁnite  and the last is conditionally  negative  deﬁnite.
+Name Abbreviation Deﬁnition
+Gaussian GA φε(r)=e−(εr)2
+Inverse quadratic IQ φε(r)=1/(1+(εr)2)
+Inverse multiquadric IMQ φε(r)=1//radicalbig
+1+(εr)2
+Multiquadric MQ φε(r)=/radicalbig
+1+(εr)2
+For ﬁxed numbers  of interpolation  nodes  and evaluations  points,  an RBF interpolant  can be viewed  as a vector-valued  
+function  of ε[8]. The RBF-CP  method  exploits  the analytic  nature  of this vector-valued  function  in the complex  ε-plane  to 
+obtain  a vector-valued  rational  approximation  that can be used as a proxy  for computing  stably  in the ε→0 limit.  One key 
+property  that is utilized  in this method  is that all the components  of the vector-valued  function  share the same singularities  
+(which  are limited  to poles).  The RBF-CP  method  obtains  a vector-valued  rational  approximation  with this property  from 
+contour  integration  in the complex  ε-plane  and Padé approximation.  However,  this method  is somewhat  computationally  
+costly  and can be numerically  sensitive  to the determination  of the poles in the rational  approximations.  In this paper,  
+we follow  a similar  approach  of generating  vector-valued  rational  approximants,  but use a newly  developed  method  for 
+computing  these.  The advantages  of this new method,  which  we refer to as RBF-RA,  over RBF-CP  include:
+•Signiﬁcantly  higher  accuracy  for the same computational  cost.
+•Shorter,  simpler  code involving  fewer  parameters,  and less use of complex  ﬂoating  point arithmetic.
+•More robust  algorithm  for computing  the poles of the rational  approximation.
+As with the RBF-CP  method,  the new RBF-RA  method  is limited  to a relatively  low number  of interpolation  nodes  (just 
+under  a hundred  in 2-D, a few hundred  in 3-D), but is otherwise  more ﬂexible  than RBF-QR  and RBF-GA  in that it immedi-
+ately applies  to any type of smooth  RBFs (see Table 1for examples),  to any dimension,  and to more generalized  interpolation  
+techniques,  such as appending  polynomials  to the basis, Hermite  interpolation,  and customized  matrix-valued  kernel  inter-
+polation.  Additionally,  it can be immediately  applied  to computing  RBF generated  ﬁnite difference  formulas  (RBF-FD)  and 
+Hermite  (or compact  or implicit)  RBF-FD  formulas  (termed  RBF-HFD),  which  are based  on standard  and Hermite  RBF inter-
+polants,  respectively [13]. RBF-FD  formulas  have seen tremendous  applications  to solving  various  PDEs[13–22] since being 
+introduced  around  2002[23,24]. It is for computing  RBF-FD  and RBF-HFD  formulas  that we see the main beneﬁts  of the 
+RBF-RA  method,  as these formulas  are typically  based  on node sizes well within  its limitations.  Additionally,  in the case of 
+RBF-HFD  formulas,  the RBF-QR  and RBF-GA  methods  cannot  be readily  used.
+Another  two areas where  RBF-RA  is applicable  is in the RBF partition  of unity (RBF-PU)  method [25–28] and domain  
+decomposition [29,30], as these also involve  relatively  small node sets. While  the RBF-QR  and RBF-GA  methods  are also 
+suitable  for these problems,  they are limited  to the Gaussian  (GA) kernel,  whereas  the RBF-RA  method  is not. In the ﬂat 
+limit, different  kernels  sometimes  give results  of different  accuracies.  It is therefore  beneﬁcial  to have stable  algorithms  
+that work for all analytic  RBFs. Figure  8 in[8]shows  an example  where  the ﬂat limits  of multiquadric  (MQ) and inverse  
+quadratic  (IQ) interpolants  are about  two orders  of magnitude  more accurate  than for GA interpolants.
+The remainder  of the paper  is organized  as follows.  We review  the issues  with RBF interpolation  using ﬂat kernels  
+in Section 2. We then discuss  the new vector-valued  rational  approximation  method  that forms  the foundation  for the 
+RBF-RA  method  for stable  computations  in Section 3. Section 4describes  the analytic  properties  of RBF interpolants  in the 
+complex  ε-plane  and how the new rational  approximation  method  is applicable  to computing  these interpolants  and also to 
+computing  RBF-HFD  weights.  We present  several  numerical  studies  in Section 5. The ﬁrst of these focuses  on interpolation  
+and illustrates  the accuracy  and robustness  of the RBF-RA  method  over the RBF-CP  method  and also compares  these methods  
+to results  using multiprecision  arithmetic.  The latter part of Section 5focuses  on the application  of the RBF-RA  method  
+to generating  RBF-HFD  formulas  for the Laplacian  and contains  results  from applying  these formulas  to solving  Poisson’s  
+equation  in a 3-D spherical  shell. We make some concluding  remarks  about  the method  in Section 6. Finally,  a brief Matlab
+code is given in Appendix A and some suggestions  on one main free parameters  of the algorithms  are given in Appendix B .
+2. The nature  of RBF ill-conditioning  in the ﬂat regime
+For notational  simplicity,  we will ﬁrst focus on RBF interpolants  of the form
+s(x,ε)=N/summationdisplay
+i=1λiφε(/bardblx−ˆxi/bardbl), (1)
+where  {ˆxi}N
+i=1⊂Rdare the interpolation  nodes  (or centers),  x ∈Rdis some evaluation  point,  /bardbl ·/bardbldenotes  the two-norm,  
+and φεis an analytic  radial  kernel  that is positive  (negative)  deﬁnite  or conditionally  positive  (negative)  deﬁnite  (see Table 1
+
+--- PAGE 3 ---
+G.B. Wright, B. Fornberg / Journal of Computational Physics 331 (2017) 137–156 139
+Fig. 1.The functions  pd(N)in the condition  number  estimate  cond(A(ε)) =O(ε−pd(N))from[33]for d =1, 2, 3. The nodes are assumed  to be scattered  in 
+d-D dimensions  and the values of pd(N)are independent  of the RBFs listed in Table 1.
+Table 2
+The number  of entries in the successive  ﬂat sections  of 
+the curves in Fig. 1. If turned 45◦clockwise,  this table 
+coincides  with Pascal’s  triangle.
+Dimension Sequence
+1 - D 1111 1 1 . . .2 - D 1234 5 6 . . .3 - D 1361 01 52 1. . ....
+for common  examples).  However,  the RBF-RA  method  applies  equally  well to many other cases.  For example,  if additional  
+polynomial  terms  are included  in (1) [31], if (1)is used to ﬁnd the weights  in RBF-FD  formulas [14], or if more generalized  
+RBF interpolants,  such as divergence-free  and curl-free  interpolants [32], are desired.
+The function  s(x, ε)interpolates  the scattered  data {ˆxi, gi}N
+i=1if the coeﬃcients  λiare chosen  as the solution  of the linear  
+system
+A(ε)λ(ε)=g. (2)
+The matrix  A(ε)has the entries
+(A(ε))i,j=φε(||ˆxi−ˆxj||), (3)
+and the column  vectors  λ(ε)and gcontain  the λiand the givalues,  respectively.  We have explicitly  indicated  that the terms  
+in (2)depend  on the choice  of εand we use underlines  to indicate  column  vectors  that do not depend  on ε(otherwise  they 
+are bolded  and explicitly  marked).  In the case of a ﬁxed set of Nnodes  scattered  irregularly  in ddimensions,  and when 
+using any of the radial  kernels  listed in Table 1,  the condition  number  of the A(ε)-matrix  grows  rapidly  when the kernels  
+are made increasingly  ﬂat (i.e. ε→0). As described  ﬁrst in[33], cond(A(ε)) =O(ε−pd(N)), where  the functions  pd(N)are 
+illustrated  in Fig. 1. The number  of entries  in the successive  ﬂat sections  of the curves  follow  the pattern  shown  in Table 2.  
+Each row below  the top one contains  the partial  sums of the previous  row. As an example,  with N=100 nodes  (at the right 
+edge of Fig. 1), cond(A(ε))becomes  in 1-D O(ε−198), in 2-D O(ε−26)and in 3-D O(ε−14).
+As a result  of the large condition  numbers  for small ε, the λi-values  obtained  by (2)become  extremely  large in magni-
+tude. Since s(x, ε)depends  in a perfectly  well-conditioned  way on the data {ˆxi, gi}N
+i=1[4,5,7],  a vast amount  of numerical  
+cancellation  will then arise when the O(1)-sized  quantity  s(x, ε)is computed  in (1). This immediate  numerical  implemen-
+tation  of (2)followed  by (1)is known  as the RBF-Direct  approach.  It consists  of two successive  ill-conditioned  numerical  
+steps for obtaining  a well-behaved  quantity.  Like the RBF-CP,  RBF-QR,  and RBF-GA  algorithms,  the new RBF-RA  method  com-
+putes exactly  the same quantity  s(x, ε)by following  steps that all remain  numerically  stable  even in the ε→0 limit.  The 
+condition  numbers  of the linear  systems  that arise within  all these algorithms  remain  numerically  reasonable  even when 
+ε→0. This often highly  accurate  parameter  regime  therefore  becomes  fully available  for numerical  work.
+One strategy  that has been attempted  for coping  with the ill- conditioning  of RBF-Direct  is to increase  εwith N. If one 
+keeps  α=ε/N1/dconstant  in d-D, cond(A(ε))stays roughly  the same when Nincreases.  However,  this approach  causes  
+stagnation  (saturation)  errors[31,34–36] , which  severely  damage  the convergence  properties  of the RBF interpolant  (and, for 
+GA-type  RBFs, causes  convergence  to fail altogether).  While  convergence  can be recovered  by appending  polynomial  terms,  
+it is reduced  from spectral  to algebraic.
+
+--- PAGE 4 ---
+140 G.B. Wright, B. Fornberg / Journal of Computational Physics 331 (2017) 137–156
+Fig. 2.Example of N=62 scattered nodes {ˆxj}N
+j=1over the unit circle.
+Fig. 3.Schematic  of the analytic  nature of the vector-valued  functions  f(ε)applicable  to our vector-valued  rational  approximation  method.  The small open 
+disks show the location  of the poles common  to all components  of f(taken here to be symmetric  about the axes). Solid black disks mark the locations  
+where fcan be evaluated  in a numerically  stable manner.  The goal is to use these samples  to construct  a vector-valued  rational  approximation  of the form 
+(4)that can be used to accurately  compute  ffor |ε| <εR.
+3. Vector-valued  rational  approximation
+The goal in this section  is to keep the discussion  of the vector-valued  rational  approximation  method  rather  general  since, 
+as demonstrated  in[37], it can be effective  also for non-RBF-type  applications.  Let f(ε) :C →CM(with M>1) denote  a 
+vector-valued  function  with components  fj(ε), j =1, ..., M, that are analytic  at all points  within  a region  /Omega1around  the 
+origin  of the complex  ε-plane  except  at possibly  a ﬁnite number  of isolated  singular  points  (poles).  Furthermore,  suppose  
+that fhas the following  properties:
+(i) All  M-components  of fshare the same singular  points.
+(ii) Direct  numerical  evaluation  of fis only possible  for |ε| ≥εR>0, where  |ε| =εRis within  /Omega1.
+(iii)ε=0i s at most a removable  singular  point of f.
+We are interested  in developing  a vector-valued  rational  approximation  to fthat exploits  these properties  and can be used 
+to approximate  ffor all ε<εR; see Fig. 3for a representative  scenario.  In Section 4, we return  to RBFs and discuss  how 
+these approximations  are especially  applicable  to the stable  computation  of RBF interpolation  and RBF-FD/HFD  weights,  both 
+of which  satisfy  the properties  (i)–(iii),  for small ε. An additional  property  satisﬁed  by these RBF applications  is:
+(iv) The  function  fis even, i.e. f(−ε) =f(ε).
+To simplify  the discussion  below,  we will assume  this property  as well. However,  the present  method  is easily  adaptable  to 
+the scenarios  where  this is not the case, and indeed,  also to the case that property  (iii) does not hold.
+
+--- PAGE 5 ---
+G.B. Wright, B. Fornberg / Journal of Computational Physics 331 (2017) 137–156 141
+Fig. 4.Structure of the overdetermined linear system (5)for calculating the coeﬃcients in the rational approximations (4).
+We seek to ﬁnd a vector-valued  rational  approximation  r(ε)to f(ε)with components  taking  the form
+rj(ε)=a0,j+a1,jε2+a2,jε4+...+am,jε2m
+1+b1ε2+b2ε4+...+bnε2n,j=1,..., M. (4)
+It is important  to note here that only the numerator  coeﬃcients  depend  on jwhile the denominator  coeﬃcients  are 
+independent  of jto exploit  property  (i) above.  Additionally,  we normalize  the constant  coeﬃcient  to one to match  as-
+sumption (iii)  and assume  the numerators  and denominator  are even to match  the assumption  (iv). To determine  these 
+coeﬃcients,  we ﬁrst evaluate  f(ε)around  a circle of radius  ε=εR(see Fig. 3), where  fcan be numerically  evaluated  in a 
+stable  manner.  Due to assumption  (iv), this evaluation  only needs  to be done at Kpoints  ε1, ..., εKalong the circle in the 
+upper  half-plane.  We then enforce  that rj(ε)agrees  with fj(ε)for all Kevaluation  points  to determine  all the unknown  
+coeﬃcients  of r(ε). The enforcement  of these conditions  can, for each j, be written  as the following  coupled  linear  system  
+of equations:
+⎡
+⎢⎢⎢⎢⎢⎣1ε2
+1···ε2m
+1
+1ε2
+2···ε2m
+2
+............
+1ε2
+K···ε2m
+K⎤
+⎥⎥⎥⎥⎥⎦
+/bracehtipupleft/bracehtipdownright/bracehtipdownleft/bracehtipupright
+E⎡
+⎢⎣a0,j
+...
+am,j⎤
+⎥⎦
+/bracehtipupleft/bracehtipdownright/bracehtipdownleft/bracehtipupright
+aj+⎛
+⎜⎜⎜⎜⎜⎝−diag(fj)⎡
+⎢⎢⎢⎢⎢⎣ε2
+1···ε2n
+1
+ε2
+2···ε2n
+2
+.........
+ε2
+K···ε2n
+K⎤
+⎥⎥⎥⎥⎥⎦⎞
+⎟⎟⎟⎟⎟⎠
+/bracehtipupleft /bracehtipdownright/bracehtipdownleft /bracehtipupright
+Fj⎡
+⎢⎣b1
+...
+bn⎤
+⎥⎦
+/bracehtipupleft/bracehtipdownright/bracehtipdownleft/bracehtipupright
+b=⎡
+⎢⎢⎢⎣f(ε1)
+f(ε2)
+...
+f(εK)⎤
+⎥⎥⎥⎦
+/bracehtipupleft/bracehtipdownright/bracehtipdownleft/bracehtipupright
+fj. (5)
+The structure  of the complete  system  is displayed  in Fig. 4. In total there are (m +1)Munknown  coeﬃcients  corresponding  
+to the different  numerators  of r(ε)and nunknown  coeﬃcients  corresponding  to the one common  denominator  of r(ε). 
+Since each subsystem  in (5)is of size K-by- K, the complete  system  is of size KM-by-((m +1)M+n). We select  parameters  
+such that m +1 +n/M<Kso that the system  is overdetermined.
+A schematic  of the eﬃcient  algorithm  we use to solve this coupled  system  is displayed  in Fig. 5. Below  are some details  
+on the ﬁve steps of this algorithm:
+Step 1: If  an evaluation  of fat some εkhappens  to have been at or near a pole, then there may be an exceptionally  large 
+row in each Fjmatrix  and corresponding  row of fj. For square  linear  systems,  multiplying  a row by a constant  
+will have no bearing  on the system  solution.  However,  for least squares  problems,  it will inﬂuence  the relative  
+importance  associated  with the equation.  For each εk, we thus normalize  each of the associated  rows (in E, Fj, and 
+fj) by dividing  them by /bardblf(εk)/bardbl∞to reduce  their inﬂated  importance  in the system.  After this normalization,  we 
+compute  a QRfactorization  of the (modiﬁed)  Ematrix.
+Step 2: We  left multiply  the system  by a block-diagonal  matrix  with blocks  Q∗on the diagonal.  This leaves  the same upper  
+triangular  Ron the main diagonal  blocks,  with Q∗Fjin last column  of block matrices  and Q∗fjin the right hand 
+side blocks.
+Step 3: Starting  from the top block equation,  we re-order  the rows so that the equations  from the previous  step corre-
+sponding  to the zero rows of Rappear  at the bottom  of the linear  system.  This gives an almost  upper  triangular  
+system,  with a full matrix  block of size M(K−(m +1))-by-nin the last block column,  which  we denote  by ˙F, and 
+the corresponding  rows of the right hand side, which  we denote  by ˙f.
+
+--- PAGE 6 ---
+142 G.B. Wright, B. Fornberg / Journal of Computational Physics 331 (2017) 137–156
+Fig. 5.Algorithm  and schematic  diagram  for solving  the system in Fig. 4. Note that in the actual implementation,  one does not actually  need to construct  
+the whole linear system and only one copy of Qand Ris kept.
+Step 4: We  compute  the least squares  solution  to the M(K−(m +1))-by-noverdetermined  system  ˙Fb=˙ffor the coeﬃ-
+cients  of the common  denominator  of the vector-valued  rational  approximation.
+Step 5: Using  the coeﬃcient  vector  bwe ﬁnally  solve the Mupper  triangular  block equations  for the numerator  coeﬃcients  
+aj, j =1, ..., M. These  systems  are decoupled  and consist  of the same (m +1)-by-(m +1)upper  triangular  block 
+matrix  R.
+AMatlab implementation  of the entire  vector-valued  rational  approximation  method  described  above  is given in Ap-
+pendix A , but with one modiﬁcation  that is applicable  to RBFs. We assume  that f(ε) =f(ε), which  additionally  implies  
+fis real when εis real. This latter condition  can be enforced  on rby requiring  that the coeﬃcients  in the numerators  
+and single  denominator  are all real. Using  this assumption  and restriction  on the coeﬃcients  of r, it then suﬃces  to do 
+the evaluations  only along the circle of radius  εRin the ﬁrst quadrant  and then split the resulting  K/2r o w s  of the linear  
+system  (5)into their real and imaginary  parts to obtain  Krows that are now all real. This allows  the algorithm  in Fig. 5to 
+work entirely  in real arithmetic.
+The following  are the dominant  computational  costs in computing  the vector-valued  rational  approximation:
+1. computing  fj(εk), j =1, ..., M, and k =1, ..., K, (or k =1, ..., K/2, in the case that the coeﬃcients  are enforced  to be 
+real);
+2. computing  the QRfactorization  of E, which  requires  O(K(m +1)2)operations;
+3. computing  Q∗Fj, j =1, ..., M, which  requires  O(MKm n )operations;
+
+--- PAGE 7 ---
+G.B. Wright, B. Fornberg / Journal of Computational Physics 331 (2017) 137–156 143
+Fig. 6.(a) Surface  plot of log10cond(A(ε))for the GA RBF and the N=62 nodes  displayed  in Fig. 2together  with a contour  plot with 51 equally  spaced 
+contours  from 1 to 17. (b) Contour  plot of the surface  in (a) over the ﬁrst quadrant  of the complex  ε-plane, now with 101 equally  spaced contours  from 1 
+to 17. The dashed  line marks a typical path along which the RBF-RA  algorithm  performs  its RBF-Direct  evaluations.
+4. solving  the overdetermined  system  for b, which  requires  O(M(K−(m +1))n2)operations;  and
+5. solving  the Mupper  triangular  systems  for aj, j =1, ..., M, which  requires  O(M(m2+mn))operations.
+We note that all of the steps of the algorithm  are highly  parallelizable,  except  for solving  the overdetermined  linear  system  
+for b. Additionally,  we note that in cases where  Mis so large that it dominates  the cost, it may be possible  to just use a 
+subset  of the evaluation  points  to determine  b, and then use these values  to determine  all of the numerator  coeﬃcients.
+In addition  to choosing  the radius  of the contour  εRfor evaluating  f, one also has to choose  m, n, and Kin vector-valued  
+rational  approximation  method.  We discuss  these choices  as they pertain  speciﬁcally  to RBF applications  in the next section.
+Remark  1. While  we described  the vector-valued  rational  approximation  algorithm  in terms  of evaluation  on a circular  
+contour,  this is not necessary.  It is possible  to use more general  evaluation  contours,  or even evaluation  locations  that are 
+scattered  within  some band surrounding  the origin  where  fcan be evaluated  in a stable  manner.
+4. RBF-RA  method
+In this section,  we describe  how the vector-valued  rational  approximation  method  can be applied  to both computing  RBF 
+interpolants  and to computing  RBF-FD/HFD  weights.  We refer to the application  of the vector-valued  rational  approximation  
+method  as the RBF-RA  method.  We focus ﬁrst on RBF interpolation  since the insights  gleaned  here can be applied  to the 
+RBF-FD/HFD  setting  (as well as many others).
+4.1. Stable  computations  of RBF interpolants
+Before  the RBF-CP  method  was introduced,  εwas in the literature  always  viewed  as a real valued  quantity.  However,  all 
+the entries  of the A(ε)-matrix,  as given by (3), are analytic  functions  of εand, in the case of the GA kernel,  they are entire  
+functions  of ε. Thus, apart from any singularities  associated  with the kernel  φthat is used to construct  the interpolant,  the 
+entries  of A(ε)−1can have no other types of singularities  than isolated  poles.
+To illustrate  the behavior  of cond(A(ε))in the complex  plane,  consider  the N=62 nodes  {ˆxi}N
+i=1scattered  over the 
+unit circle in Fig. 2and the GA kernel.  For this example,  pd(N)in Fig. 1is given by p2(62) =20, so that cond(A(ε)) =
+||A(ε)||2||A(ε)−1||2=O(ε−20). Since ||A(ε)||2stays O(N)as ε→0, it holds also that ||A(ε)−1||2=O(ε−20). Fig. 6(a) 
+shows  a surface  plot of log10(cond(A(ε)))in the complex  ε-plane.  The ﬁrst thing we note in this ﬁgure  is that cond(A(ε))is 
+symmetric  with respect  to both the real and the imaginary  axes since the interpolant  (1)satisﬁes  the symmetry  relationship
+s(x,ε)=s(x,−ε)=s(x,ε)=s(x,−ε). (6)
+We also recognize  the fast growth  rate of cond(A(ε))not only for ε→0a l o n g  the real axis, but also when ε→0f r o m  any 
+direction  in the complex  plane.  Finally,  we note sharp spikes  corresponding  to the poles of A(ε)−1. To illustrate  the behavior  
+of cond(A(ε))further,  we display  a contour  plot of log10(cond(A(ε)))in Fig. 6(b), but now only in the ﬁrst quadrant,  which  
+is all that is necessary  because  of the symmetry  conditions  (6). The number  of poles is seen to increase  very rapidly  with 
+
+--- PAGE 8 ---
+144 G.B. Wright, B. Fornberg / Journal of Computational Physics 331 (2017) 137–156
+increasing  distance  from the origin,  but there are only a few present  near the origin.  The dashed  line in Fig. 6(b) with radius  
+0.96 marks  where,  in this case, cond(A(ε)) ≈1012, which  is an acceptable  level for computing  s(x, ε)using RBF-Direct.
+Now suppose  that we are given M>1p o i n t s  {xj}M
+j=1to evaluate  the interpolant  s(x, ε)at, with εleft as a variable.  We 
+can write this as the following  vector-valued  function  of ε:
+⎡
+⎢⎢⎢⎣s(x1,ε)
+s(x2,ε)
+...
+s(xM,ε)⎤
+⎥⎥⎥⎦
+/bracehtipupleft/bracehtipdownright/bracehtipdownleft/bracehtipupright
+s(ε)=⎡
+⎢⎢⎢⎣φε(/bardblx1−ˆx1/bardbl)···φε(/bardblx1−ˆxN/bardbl)
+φε(/bardblx2−ˆx1/bardbl)···φε(/bardblx2−ˆxN/bardbl)
+.........
+φε(/bardblxM−ˆx1/bardbl)···φε(/bardblxM−ˆxN/bardbl)⎤
+⎥⎥⎥⎦
+/bracehtipupleft /bracehtipdownright/bracehtipdownleft /bracehtipupright
+/Phi1(ε)⎡
+⎢⎢⎣A(ε)−1⎤
+⎥⎥⎦⎡
+⎢⎣g1
+...
+gN⎤
+⎥⎦
+/bracehtipupleft/bracehtipdownright/bracehtipdownleft/bracehtipupright
+g. (7)
+The entries  of /Phi1(ε)are analytic  functions  of εwithin  some disk of radius  εRcentered  at the origin  and A(ε)−1can have 
+at most poles in this disk. Thus, s(ε)in (7)is analytic  inside  this disk apart from the poles of A(ε)−1. Furthermore,  since 
+each entry of s(ε)is computed  from A(ε)−1, they all share the same poles (note the similarity  between  Fig. 6(b) and 
+Fig. 3). Finally,  we know that typically,  and always  in the case that the GA kernel  is used, that ε=0m u s t  be a removable  
+singularity  of s(ε)[5,7]. These  observations  together  with the symmetry  relationship  (6), show that s(ε)satisﬁes  all but 
+possibly  one of the properties  for the vector-valued  functions  discussed  in the previous  section  that the new vector-valued  
+rational  approximation  is applicable  to.
+The property  that may not be satisﬁed  by s(ε)is (ii). The issue is that the region  of ill-conditioning  of A(ε), which  tends 
+to be disk-shaped,  may spread  out so far in the complex  ε-plane  that it is not possible  to ﬁnd a radius  εRfor the evaluation  
+contour  where  RBF-Direct  can be used to solve (7)or that does not enclose  the singular  points  associated  with the kernels  
+(branch  points  in the case of the MQ kernel  and poles in the case of the IQ kernel).  The GA kernel  has no singular  points.  
+However,  since it grows  like O(exp(|ε|2))when π/4 <Arg(ε) <3π/4, this leads to a different  type of ill-conditioning  in 
+A(ε)in these regions  (see Fig. 6) and prevents  a radius  that is too large from being used. For N/lessorsimilar100 in  2-D and N/lessorsimilar300
+in 3-D, the region  of ill-conditioning  surrounding  ε=0i s typically  small enough  (in double  precision  arithmetic)  for a safe 
+choice  of εR. As mentioned  in the introduction,  these limitations  on Nare not problematic  in many RBF applications.  We 
+discuss  some strategies  for choosing  εRin Appendix B .
+After choosing  the radius  εRof the evaluation  contour  to use in the vector-valued  rational  approximation  method  for 
+(7), one must choose  values  for m, n, and K. The optimal  choice  of these parameters  depends  on many factors,  including  
+the locations  of the singular  points  from A(ε)−1, which  are not known  a priori.  We have found  that for a given K, choosing  
+m =K−nand n =⌊K/4⌋gives consistently  good results  across  the problems  we have tried. With these choices,  one 
+can work out that the cost of the RBF-RA  method  is O(KN(N2+M) +MK3). As demonstrated  by the numerical  results  in 
+Section5, the approximations  converge  rapidly  with K, so that not too large a value of Kis required  to obtain  an acceptable  
+approximation.  With these parameters  selected,  we can construct  a vector-valued  rational  approximation  r(ε)for s(ε)in (7)
+that can be used as a proxy  for computing  the RBF interpolant  stably  for all values  of εinside  the disk of radius  εR, 
+including  ε=0.
+4.2. Stable  computations  of RBF-FD  and RBF-HFD  formulas
+RBF-FD  and RBF-HFD  formulas  generalize  standard,  polynomial-based  FD and compact  or Hermite  FD (HFD)  formulas,  
+respectively,  to scattered  nodes.  We discuss  here only brieﬂy  how to generate  these formulas  and how they can be computed  
+using the vector-valued  rational  approximation  scheme  from Section 3. More thorough  discussions  of the RBF-FD  methods  
+can be found  in[14], and more details  on RBF-HFD  methods  can be found  in[13].
+Let Dbe a differential  operator  (e.g. the Laplacian)  and ˆX={ˆxi}N
+i=1denote  a set of (scattered)  node locations  in Rd. 
+Suppose  g:Rd→Ris some (suﬃciently  smooth)  function  sampled  on ˆXand that we wish to approximate  Dg(x)at x =ˆx1
+using a linear  combination  of samples  of gat the nodes  in ˆX, i.e.
+Dg(x)/vextendsingle/vextendsingle
+x=ˆx1≈N/summationdisplay
+i=1wig(ˆxi). (8)
+The RBF-FD  method  determines  the weights  wiin this approximation  by requiring  that (8)be exact whenever  g(x) =
+φε(/bardblx −ˆxi/bardbl), i =1, ..., N, where  φεis, for example,  one of the radial  kernels  from Table 1.1These  conditions  can be written  
+as the following  linear  system  of equations:
+1The RBF-FD  (and HFD) method  is general  enough  to allow for radial kernels  that are not analytic  functions  of ε, or that do not depend  on a shape 
+parameter  at all[31]. We assume  the kernels  are analytic  in the presentation  as the RBF-RA  algorithm  is applicable  only in this case.
+
+--- PAGE 9 ---
+G.B. Wright, B. Fornberg / Journal of Computational Physics 331 (2017) 137–156 145
+⎡
+⎢⎢⎢⎣A(ε)⎤
+⎥⎥⎥⎦⎡
+⎢⎢⎢⎣w1(ε)
+w2(ε)
+...
+wN(ε)⎤
+⎥⎥⎥⎦
+/bracehtipupleft/bracehtipdownright/bracehtipdownleft/bracehtipupright
+w(ε)=⎡
+⎢⎢⎢⎢⎣Dxφε(/bardblx−ˆx1/bardbl)/vextendsingle/vextendsingle
+x=ˆx1
+Dxφε(/bardblx−ˆx2/bardbl)/vextendsingle/vextendsingle
+x=ˆx1...
+Dxφε(/bardblx−ˆxN/bardbl)/vextendsingle/vextendsingle
+x=ˆx1⎤
+⎥⎥⎥⎥⎦
+/bracehtipupleft/bracehtipdownright/bracehtipdownleft /bracehtipupright
+Dxφε, (9)
+where  A(ε)is the standard  RBF interpolation  matrix  with entries  given in (3)and Dxmeans  Dapplied  with respect  to x
+(this latter notation  aids the discussion  of the RBF-HFD  method  below).  We have here explicitly  marked  the dependence  of 
+the weights  wion ε. Using  the same arguments  as in the previous  section,  we see that the vector  of weight  w(ε)can be 
+viewed  as a vector-valued  function  of εwith similar  analytic  properties  as an RBF interpolant  based  on φε. We can thus 
+similarly  apply the vector-valued  rational  approximation  algorithm  for computing  w(ε)in a stable  manner  as ε→0.
+The additional  constraint  that (8)is exact when gis a constant  is often imposed  in the RBF-FD  method,  which  is 
+equivalent  to requiring  /summationtextN
+i=1wi=D1. This leads to an equality  constrained  quadratic  programing  problem  that can be 
+solved  using Lagrange  multipliers  leading  to the following  slightly  modiﬁed  version  of the system  in(9)for determining  
+w(ε):
+/bracketleftbigg
+A(ε)e
+eT0/bracketrightbigg/bracketleftbigg
+w(ε)
+λ(ε)/bracketrightbigg
+=/bracketleftbigg
+Dxφε
+D1/bracketrightbigg
+, (10)
+where  eis the vector  of size Ncontaining  all ones, and λ(ε)is the Lagrange  multiplier.  The vector-valued  rational  approxi-
+mation  algorithm  is equally  applicable  to approximating  w(ε)in this equation.
+The HFD method  is similar  to the FD method,  except  that we seek to ﬁnd an approximation  of Dg(x)at x =ˆx1that 
+involves  a linear  combination  of gat the nodes  in ˆXa n da linear  combination  of Dgat another  set of nodes  ˆY={ˆyj}L
+j=1, 
+i.e.
+Dg(x)/vextendsingle/vextendsingle
+x=ˆx1≈N/summationdisplay
+i=1wig(ˆxi)+L/summationdisplay
+j=1˙wjDg(x)/vextendsingle/vextendsingle
+x=ˆyj. (11)
+Here ˆx1/∈ˆY, or else the approximation  is trivial,  also ˆYis typically  chosen  to be some subset  of ˆX(not including  ˆx1), but 
+this is not necessary.  The RBF-HFD  method  from[13]determines  the weights  by requiring  that (11)is exact for g(x) =
+φε(/bardblx −ˆxi/bardbl), i =1, ..., N, in addition  to g(x) =Dyφε(/bardblx −y/bardbl)/vextendsingle/vextendsingle
+y=ˆyj, where  Dymeans  Dapplied  to the variable  y. This gives 
+N+Lconditions  for determining  the weights  in (11). We can write these conditions  as the following  linear  system  for the 
+vector  of weights:
+/bracketleftbigg
+A(ε)B(ε)
+B(ε)TC(ε)/bracketrightbigg
+/bracehtipupleft/bracehtipdownright/bracehtipdownleft/bracehtipupright
+˜A(ε)/bracketleftbigg
+w(ε)
+˙w(ε)/bracketrightbigg
+/bracehtipupleft/bracehtipdownright/bracehtipdownleft/bracehtipupright
+˜w(ε)=/bracketleftbigg
+Dxφε
+DxDyφε/bracketrightbigg
+, (12)
+where  ˜w(ε) =/bracketleftbig
+w1(ε)··· wN(ε)˙w1(ε)···˙wL(ε)/bracketrightbigT, A(ε)is the standard  interpolation  matrix  for the nodes  in ˆX
+(see (3)),
+(B(ε))ij=Dyφ(/bardblxi−y/bardbl)/vextendsingle/vextendsingle
+y=ˆyj,i=1,..., N,j=1,..., L,
+(C(ε))ij=Dx/parenleftBig
+Dyφ(/bardblx−y/bardbl)/vextendsingle/vextendsingle
+y=ˆyj/parenrightBig/vextendsingle/vextendsingle
+x=ˆxi,i=1,..., L,j=1,..., L,and
+(DxDyφε)i=Dx/parenleftBig
+Dyφ(/bardblx−y/bardbl)/vextendsingle/vextendsingle
+y=ˆyi/parenrightBig/vextendsingle/vextendsingle
+x=ˆx1,i=1,..., L.
+The system  (12)is symmetric  and, under  very mild restrictions  on the operator  D, is non-singular  for all the kernels  φεin 
+Table 1;  see[38]for more details.
+Similar  to the RBF-FD  method,  the vector  of weights  ˜w(ε)in (12)is an analytic  vector-valued  function  of εwith each 
+entry sharing  the same singular  points,  due now to ˜A(ε)−1, in a region  surrounding  the origin.  We can thus similarly  apply 
+the vector-valued  rational  approximation  algorithm  for computing  ˜w(ε)in a stable  manner  as ε→0.
+We note that in the RBF-HFD  method  it is also common  to enforce  that (11)is exact for constants.  This constraint  can 
+be imposed  in a likewise  manner  as the RBF-FD  case in (10). We thus skip the details  and refer the reader  to[13]for the 
+explicit  construction.
+Remark  2. In using the vector-valued  rational  approximation  algorithm  for RBF applications,  we have found  that it is ben-
+eﬁcial  to spatially  re-scale  the node sets by the radius  of the evaluation  contour  in the complex  ε-plane,  which  allows  all 
+evaluations  and subsequent  computations  of the algorithm  to be done on the unit circle.  This is the approach  we follow  in 
+the examples  given in Appendix A.
+
+--- PAGE 10 ---
+146 G.B. Wright, B. Fornberg / Journal of Computational Physics 331 (2017) 137–156
+Fig. 7.Comparison  of the relative  errors (computed  interpolant  – target function  (13)) vs. εusing RBF-Direct  (dashed  lines) and RBF-RA  (solid lines). Note 
+the different  scale on the horizontal  axis in (a).
+5. Numerical  results
+In this section,  we ﬁrst present  results  of the RBF-RA  algorithm  as applied  to RBF interpolation  and follow  this up with 
+some results  on computing  RBF-HFD  formulas  and their application  to a ‘large-scale’  problem.  The primary  studies  of the 
+accuracy  and robustness  of the algorithm  in comparison  to the RBF-CP  method  and multiprecision  arithmetic  are given for 
+RBF interpolation  as the observations  made here also carry over to the RBF-HFD  setting.
+5.1. RBF interpolation  results
+Unless  otherwise  noted,  all numerical  results  in this subsection  are for the N=62 nodes  over the unit disk shown  in 
+Fig. 2and for the target  function
+g(x)=g(x,y)=(1−(x2+y2))/bracketleftbigg
+sin/parenleftBigπ
+2(y−0.07)/parenrightBig
+−1
+2cos/parenleftBigπ
+2(x+0.1)/parenrightBig/bracketrightbigg
+. (13)
+We use M=41 evaluation  points  X={xj}M
+j=1scattered  over the unit disk in the RBF-RA  algorithm  and also use these 
+points  to measure  errors  in the interpolant  at various  values  of ε.
+5.1.1. Errors  between  interpolant  and target  function
+In the ﬁrst numerical  experiment,  we compare  the relative  error in the RBF interpolant  of the target  function  (13)using 
+RBF-Direct  and RBF-RA  over a range of different  ε. Speciﬁcally,  we compute  the relative  error as
+max
+1≤j≤M/vextendsingle/vextendsingles(xj,ε)−g(xj)/vextendsingle/vextendsingle/max
+1≤j≤M/vextendsingle/vextendsingle
+g(xj)/vextendsingle/vextendsingle,(14)
+for scomputed  with the two different  techniques.  The results  are shown  in Fig. 7(a)–(c),  for the GA, IQ, and MQ radial  
+kernels,  respectively.  We see that RBF-Direct  works  well for all these kernels  until ill-conditioning  of the interpolation  
+matrices  sets in, while RBF-RA  allows  the interpolants  to be computed  in a stable  manner  right down to ε=0. The observed  
+pattern  of a dip in the RBF-RA  error plots is common  and is explained  in[6,33]; it is a feature  of the RBF interpolant  and 
+does not have to do with ill-conditioning  of the RBF-RA  method.
+5.1.2. Accuracy  vs. εand K
+In all the remaining  subsections  of 5.1except  the last one, we focus on the difference  between  the computed  interpolant  
+and the exact interpolant.  Speciﬁcally,  we compute
+max
+1≤j≤M/vextendsingle/vextendsingles(xj,ε)−sexact(xj,ε)/vextendsingle/vextendsingle/max
+1≤j≤M/vextendsingle/vextendsingle
+sexact(xj,ε)/vextendsingle/vextendsingle,(15)
+where  sis the interpolant  obtained  from either  RBF-RA,  RBF-CP,  or RBF-Direct,  and sexactis the ‘exact’  interpolant,  computed  
+using multiprecision  arithmetic  with 200 digits.  Additionally,  for brevity,  we limit the presented  results  to the GA kernel  as 
+similar  results  were observed  for other radial  kernels.
+In the ﬁrst round  of experiments,  we compare  the accuracy  of the RBF-RA  and RBF-CP  algorithms  as a function  of ε
+and K(the number  of εpoints  on the contour  used in both algorithms).  We present  the results  in terms  of K/2s i n c e  
+this is the actual  total number  of evaluations  of the interpolants  that have to be made (see comment  towards  the end of 
+Section 3), which  is the dominating  cost of the algorithm.  Fig. 8(a) shows  the relative  errors  in the interpolants  computed  
+using the RBF-RA  and RBF-CP  methods  for 0 <ε≤1 and  for K/2 =22 and  K/2 =32, respectively.  It is immediately  obvious  
+from these results  that the RBF-RA  algorithm  gives more accurate  results  over the entire  range of εand that this is more 
+prominent  as εgrows.  Additionally,  increasing  Khas only a minor  effect on the accuracy  of the RBF-RA  method,  but 
+
+--- PAGE 11 ---
+G.B. Wright, B. Fornberg / Journal of Computational Physics 331 (2017) 137–156 147
+Fig. 8.Comparison  of the errors (computed  interpolant  – exact interpolant)  as the number  of evaluations  points Kon the contour  varies. Figures  (a) and 
+(b) show the relative  max-norm  error for ε∈[0, 1]for K/2 =22 and  K/2 =32 (we  use K/2s i n c e  this is this is the actual number  of evaluations  of the 
+interpolant  that are required).  Figure (c) shows the relative  two norm of the error taken only over 0 ≤ε≤0.9a s a function  of K/2.
+has a more pronounced  effect on the RBF-CP  method,  with an increased  range of εfor which  it is accurate.  We explore  
+the connection  between  accuracy  and Kfurther  by plotting  in Fig. 8(c) the relative  errors  in the interpolant  for many 
+different  K. Here the errors  are computed  for each K, by ﬁrst computing  the max-norm  error (15)and then computing  the 
+two-norm  of these errors  over 0 <ε≤0.9. We see that the RBF-RA  method  converges  rapidly  with K, while the RBF-CP  
+method  converges  much slower  (but still at a geometric  rate). The reason  the error stops decreasing  in the RBF-RA  method  
+around  10−9is that this is about  the relative  accuracy  that can be achieved  using RBF-Direct  to compute  the interpolants  
+on the contour  in the complex  ε-plane.
+5.1.3. RBF-RA  vs. multiprecision  RBF-Direct
+An all too common  way to deal with the ill-conditioning  associated  with ﬂat RBFs is to use multiprecision  ﬂoating  point 
+arithmetic  with RBF-Direct.  While  this does allow one to consider  a larger  range of εin applications,  it comes  at a higher  
+computational  cost as the computations  have to be done using special  software  packages  instead  of directly  in hardware.  
+Typically,  quad precision  (approximately  34 decimal  digits)  is used since ﬂoating  point operations  on these numbers  can 
+combine  two double  precision  numbers,  which  can improve  the cost. Fig. 9(a) compares  the errors  in the interpolants  
+computed  using RBF-RA  and RBF-Direct  with both double  and quad precision  arithmetic,  with the latter being computed  
+using the Advanpix  multiprecision Matlab toolbox [39]. We see from the ﬁgure  that the range of εthat can be considered  
+with RBF-Direct  and quad precision  increases,  but that the method  is still not able to consider  the full range.  There  is 
+nothing  to prevent  quad precision  from also being used with RBF-RA  and in Fig. 9(a) we have included  two results  with 
+quad precision.  The ﬁrst uses quad precision  only to evaluate  the interpolant  (which  is the step that has the potential  to be 
+ill-conditioned),  with all subsequent  computations  of the RBF-RA  method  done in double  precision.  The second  uses quad 
+precision  throughout  the entire  RBF-RA  algorithm.  We see from the results  that the errors  in the interpolant  for both cases 
+
+--- PAGE 12 ---
+148 G.B. Wright, B. Fornberg / Journal of Computational Physics 331 (2017) 137–156
+Fig. 9.(a) Comparison  of the errors (computed  interpolant  – exact interpolant)  using double precision  and quad precision  arithmetic.  The top RBF-RA  quad 
+curve corresponds  to using quad precision  only when evaluating  the interpolant,  whereas  the bottom  quad curve corresponds  to using quad precision  for 
+all the computations  in the RBF-RA  method.  (b) Similar  to (a) but for multiple  precision  arithmetic  using Ddigits (here D =16 is double precision  and 
+D =34 is quad precision).  Here RBF-Direct  results are in the dashed  lines; note also the logarithmic  scale in ε.
+are now much lower  than the double  precision  case. In Fig. 9(b) we further  explore  the use of multiprecision  arithmetic  
+with the RBF-Direct  algorithm  (again  using Advanpix)  by looking  at the error in the interpolant  as the number  of digits 
+used is increased.  Now, we consider  10−5<ε≤10−1to clearly  illustrate  that the ill-conditioning  of RBF-Direct  cannot  be 
+completely  overcome  with this technique,  but that it can be completely  overcome  with RBF-RA.
+5.1.4. Contours  passing  close to poles
+To demonstrate  the robustness  of the new RBF-RA  algorithm  we consider  a case where  the evaluation  contour  runs very 
+close to a pole in the complex  ε-plane.  For the N=62 node  example  we are considering  in these numerical  experiments,  
+there is a pole at ε≈1.4617904771448 i. We choose  for both the RBF-RA  and RBF-CP  algorithms  a circular  evaluation  
+contour  centered  at the origin  of radius  εR=1.4618. This contour  is superimposed  on a contour  plot of the condition  
+number  in Fig. 10(a) (see the dashed  curve).  Fig. 10(b) shows  the max-norm  errors  (again  together  with RBF-Direct  for 
+comparison)  in the interpolants  (15)computed  with both algorithms  using this contour.  We see that the RBF-CP  algorithm  
+gives entirely  useless  results  for this contour,  while the RBF-RA  algorithm  performs  as good (if not slightly  better)  than the 
+case where  the contour  does not run close to any poles.
+5.1.5. Vector-valued  rational  approximation  vs. rational  interpolation
+A seemingly  simpler  approach  to obtain  vector-valued  rational  approximations  to the interpolant  s(ε)in (7)is to use 
+rational  interpolation  (or approximation)  of each of the Mentries  of s(ε)separately [40], instead  of the RBF-RA  procedure  
+that couples  the entries  together.  However,  we have found  that this does not produce  as accurate  results  and can lead 
+to issues  with the approximants.  Fig. 11illustrates  this by comparing  the errors  that result  from approximating  susing 
+the standard  RBF-RA  procedure  to that of using RBF-RA  separately  for each of the Mentries  of s(ε)(which  amounts  to 
+computing  a rational  interpolant  of each entry).  We ﬁrst see from this ﬁgure  that the RBF-RA  procedure  is at least an 
+order of magnitude  more accurate  than the rational  interpolation  approach.  Second,  we see a few values  of εwhere  the 
+error spikes  in the rational  interpolation  method.  These  spikes  correspond  to spurious  poles,  or “Froissart  doublets” [41], 
+appearing  near or on the real ε-axis. Froissart  doublets  are especially  common  in rational  approximation  methods  where  the 
+input contains  noise[42], which  occurs  in our application  at roughly  the unit roundoff  of the machine  times the condition  
+number  of the RBF interpolation  matrix  on the evaluation  contour  of the RBF-RA  algorithm.  The least squares  nature  of 
+determining  a common  denominator  in the RBF-RA  method  appears  to signiﬁcantly  reduce  the presence  of these spurious  
+poles.
+5.1.6. Timing  example  for a 3-D problem
+Finally,  we compare  the computational  cost of the RBF-RA  method  to that of the RBF-Direct  method.  For this comparison,  
+we use Halton  node sets over the unit cube in R3of increasing  size N(generated  with theMatlab function haltonset ). 
+For the evaluation  points,  we also use Halton  node sets with the same cardinality  as the nodes  (i.e. M=N), but shift them 
+
+--- PAGE 13 ---
+G.B. Wright, B. Fornberg / Journal of Computational Physics 331 (2017) 137–156 149
+Fig. 10. (a) Contour  plot of log10(cond(A(ε)))(similar  to Fig. 6(b)) with an evaluation  contour  (dashed  line) running  very close to a pole on the imaginary  
+axis. (b) Comparison  of the errors (computed  interpolant  – exact interpolant)  associated  with the RBF-RA  and RBF-CP  algorithms  using the evaluation  
+contour  in part (a). Here we used K/2 =32 evaluation  points on the contour;  doubling  this number  does not appear to improve  the RBF-CP  results at all.
+Fig. 11.Comparison  of the errors (computed  interpolant  – exact interpolant)  when using RBF-RA  with all the evaluation  points (solid line marked  RBF-RA),  
+when applying  RBF-RA  separately  to each evaluation  point (dashed  line), and when using RBF-Direct.  In the second case, a rational  approximant  is computed  
+separately  for each entry of the vector-valued  function.  In both RBF-RA  cases, we set K/2 =40.
+so they don’t agree with the nodes;  having  M=Nis a common  scenario  in generating  RBF-FD/HFD  formulas.  The target  
+function  gis not important  in this experiment,  as we are only concerned  with timings.  Fig. 12(a) shows  the measured  wall 
+clock times of two methods  for evaluating  the interpolant  at ε=10−2. Included  in this ﬁgure  are the wall clock times also 
+for computing  the interpolants  using multiprecision  arithmetic,  with D =100 digits  for RBF-Direct  and with D =34 (quad  
+precision)  for RBF-RA.  For the N>100 and  ε=0.01, it is necessary  to switch  to multiprecision  arithmetic  with RBF-Direct  
+to get a meaningful  result,  whereas  RBF-RA  in double  precision  has no issues  with ill-conditioning.  While  D =100 is  larger  
+than is necessary  for RBF-Direct  with ε=10−2, it is reasonable  for smaller  ε(see Fig. 9(b)), also the timings  do not go 
+down very much by decreasing  D. The quad precision  results  are included  for comparison  purposes  with RBF-Direct  in 
+multiprecision  mode;  they are not necessary  to obtain  an accurate  result  for these values  of N. For the double  precision  
+computations,  we see that the cost of RBF-RA  is about  100 times that of RBF-Direct.  However,  for small ε, the comparison  
+should  really be made between  RBF-Direct  using multiprecision  arithmetic,  in which  case RBF-RA  is about  an order of 
+magnitude  more eﬃcient.  Based  on the timing  results  in[12, Section  6.3], the computational  cost of the RBF-RA  method  is 
+about  a factor  of two or three larger  than the RBF-QR  method  and about  a factor  of ten larger  than the RBF-GA  method,  
+which  (at about  10 times the cost of RBF-Direct)  is the fastest  of the stable  algorithms  (for GA RBFs).
+One added  beneﬁt  of the RBF-RA  method  is that evaluating  the interpolant  at multiple  values  of ε(which  is required  
+for some shape  parameter  selection  algorithms)  comes  at virtually  no additional  computational  cost. The same is not true 
+for the RBF-Direct  method.  We demonstrate  this feature  in Fig. 12(b), where  the wall clock times of the algorithms  are 
+displayed  for evaluating  the interpolants  at εj=10−j, j =0, ..., 9.
+
+--- PAGE 14 ---
+150 G.B. Wright, B. Fornberg / Journal of Computational Physics 331 (2017) 137–156
+Fig. 12.Measured  wall clock time (in seconds)  as a function  of the number  of 3-D Halton nodes Nfor the RBF-RA  (with K/2 =32) and RBF-Direct  methods.  
+(a) A comparison  of the methods  for computing  the interpolant  at M=Nevaluation  points and for one value of ε(set to ε=10−2). (b) Same as (a), but 
+for computing  the interpolant  at ten values of ε(set to εj=10−j, j =0, ..., 9). The dashed  lines were computed  using multiprecision  arithmetic,  with 
+D =100 digits  for RBF-Direct  and D =34 (quad  precision)  for RBF-RA.  All timings  were done using Matlab 2016a on a 2014 MacBook  Pro with 16 GB of 
+RAM and an 3G H z Intel Core i7 processor  without  explicit  parallelization.  The multiprecision  computations  were done using the Advanpix  multiprecision
+Matlab toolbox [39].
+The dominant  cost of the RBF-RA  method  comes  from evaluating  the interpolant  on the contour,  which  can be done in 
+parallel.  The timings  presented  here have made no explicit  use of parallelization  for these evaluations,  so further  improve-
+ments  to the of eﬃciency  the method  over RBF-Direct  are still possible.
+5.2. RBF-HFD  results
+In this section  we consider  the application  of the RBF-RA  method  to computing  RBF-HFD  weights  for the 3-D Laplacian  
+and use these to solve Poisson’s  equation  in a spherical  shell. Speciﬁcally,  we are interested  solving
+/Delta1u=g,in/Omega1=/braceleftbigg
+(x,y,z)∈R3/vextendsingle/vextendsingle/vextendsingle11/20≤/radicalBig
+x2+y2+z2≤1/bracerightbigg
+, (16)
+subject  to Dirichlet  boundary  conditions  on the inner and outer surfaces  of the shell. Here we take the exact solution  to be
+u(λ,θ, r)=sin/parenleftbigg20π
+9/parenleftbigg
+r−11
+20/parenrightbigg/parenrightbigg/bracketleftbigg
+Y0
+6(λ,θ) +14
+11Y5
+6(λ,θ)/bracketrightbigg
+,
+where  (λ, θ, r)are spherical  coordinates  and Ym
+/lscriptdenote  real-valued  spherical  harmonics  of degree  /lscriptand order m. This uis 
+used to generate  gin (16)to set up the problem.  We use 500,000  global  nodes  to discretize  the shell2; see the left image  
+of Fig. 13for an illustration  of the nodes.  We denote  the nodes  interior  to the shell by /Xi1int={ξk}P
+k=1and the nodes  on the 
+boundary  by /Xi1bnd={ξk}P+Q
+k=P+1. For our test problem,  P=453,405 and  Q=46,595.
+The procedure  for generating  the RBF-HFD  formulas  is as follows:  For k =1, ..., Prepeat  the following
+1. Select  the N−1n e a r e s t  neighbors  of ξkfrom /Xi1int∪/Xi1bnd(using  a k-d tree for eﬃciency),  with N<< P. These  nodes  
+plus ξkform the set ˆX={ˆxi}N
+i=1in (11), with the convention  that ˆx1=ξk.
+2. From  the set ˆX, select  the L <Nnearest-neighbors  to ˆx1. These  nodes  form the set ˆY={ˆyj}L
+j=1in (11).
+3. Use  ˆX, ˆY, and D=/Delta1in (12), then apply the vector-valued  rational  approximation  algorithm  to compute  the weights  
+for given values  of ε. Note that standard  Cartesian  coordinates  can be used in applying  Din (12) [21] .
+In the numerical  experiments,  we set N=45 and  L =20 and  use the IQ radial  kernel.  We also set K/2 =64 and  choose  
+n =K/4.
+We ﬁrst demonstrate  the accuracy  of the RBF-RA  procedure  for computing  the RBF-HFD  weights  in the ε→0 limit  by 
+comparing  the computed  weights  for one of the stencils  to the ‘exact’  value of the weights  computed  using multiprecision  
+arithmetic  with D =200 digits.  The results  are displayed  in Fig. 14(a), together  with the error in the weights  computed  with 
+2These nodes were generated  by Prof. Douglas  Hardin at Vanderbilt  University  using a modiﬁed  version  of the method  discussed  in[43].
+
+--- PAGE 15 ---
+G.B. Wright, B. Fornberg / Journal of Computational Physics 331 (2017) 137–156 151
+Fig. 13.Illustration  of the global and local node set used in the RBF-HFD  method  for solving  Poisson’s  equation  in a spherical  shell with radius 0.55 ≤r≤1, 
+which mimics  the aspect radius of the Earth’s mantle.  The left ﬁgure shows the shell split open, with part of the 5 ·105global node set marked  by small 
+solid spheres.  A small subset of the nodes is shown to the right, with the HFD stencil’s ‘center’  node marked  in red. (For interpretation  of the references  to 
+color in this ﬁgure legend,  the reader is referred  to the web version  of this article.)
+RBF-Direct  in double  precision  arithmetic.  We can see from the ﬁgure  that the RBF-RA  method  can compute  the weights  in 
+a stable  manner  for the full range of ε, with no loss in accuracy  from the computation  using RBF-Direct  in the numerically  
+‘safe’ region.
+Next, we use the RBF-HFD  weights  to numerically  solve the Poisson  equation  (16)for various  values  of εin the interval  
+[0, 8]. Letting  uand gdenote  samples  at the nodes  /Xi1intof the unknown  solution  and right hand side of (16), respectively,  
+the discretized  version  of (16)can be written  as
+Du=˙Dg.
+In this equation,  Dand ˙Dare two sparse  P-by- Pmatrices  with the kth row  of Dcontaining  the explicit  weights  wiin (11)
+and the kth row  of ˙Dcontaining  the implicit  weights  ˙wjin (11), for the kth node  of /Xi1int. To solve this system,  we used 
+BiCGSTAB  with a zero-ﬁll  ILU-preconditioner  and a tolerance  on the relative  residual  of 10−10. Fig. 14(b) shows  the relative  
+two-norm  of the errors  in the approximate  solutions  as a function  of ε. Marked  on this plot is the region  where  RBF-Direct  
+becomes  unstable,  and RBF-RA  is used. We see that a reduction  of the error by nearly  two orders  of magnitude  is possible  
+for εvalues  that are untouchable  with RBF-Direct  in double  precision  arithmetic.  We note that for all values  of ε, the solver  
+required  an average  of 27.5 iterations  and took 13.95 seconds  of wall clock time using Matlab 2014b  on a Linux workstation  
+with 96 GB of RAM and dual 3.1 GHz  8-core  Intel Xeon processors.
+6. Concluding  remarks
+The present  numerical  tests demonstrate  that the RBF-RA  algorithm  can be used effectively  for stably  computing  RBF 
+interpolants  and RBF-FD/HFD  formulas  in the ε→0 limit.  The method  is more accurate  and computationally  eﬃcient  
+than the Contour-Padé  method,  and more ﬂexible  than the RBF-QR  and RBF-GA  algorithms,  in that operations  such as 
+differentiation  can readily  be applied  directly  to the RBFs instead  of to the more complex  bases that arise in these other 
+two methods.  Its main disadvantages  compared  to these methods  are (i) that it is not quite as eﬃcient,  and (ii) that it is 
+more limited  in the node sizes it can handle.  However,  with the main target  application  of the algorithm  being to compute  
+RBF-FD  and RBF-HFD  formulas,  these disadvantages  are not serious  concerns.  The RBF-RA  algorithm  is also applicable  to 
+more general  rational  function  approximation  problems  that involve  vector-valued  analytic  functions  with components  that 
+have the same singular  points.
+A known  issue with the RBF-CP,  RBF-GA,  and RBF-QR  method  is that the accuracy  degrades  if the nodes  lie on a portion  
+of a lower  dimensional  algebraic  curve or surface  (e.g. a cap on the unit sphere  in R3). This issue also extends  to the RBF-RA  
+method  and will be a future  topic of research.
+Acknowledgements
+The authors  thank  Nick Trefethen  for many fruitful  discussions  regarding  rational  approximations  when they were ﬁrst 
+putting  the ideas of this paper  together.  The work of Grady  Wright  was supported  by National  Science  Foundation  grants  
+DMS-1160379  and ACI-1440638.
+
+--- PAGE 16 ---
+152 G.B. Wright, B. Fornberg / Journal of Computational Physics 331 (2017) 137–156
+Fig. 14.(a) Comparison  of the errors in the computation  of the RBF-HFD  weights  for one of the stencils  from the node set shown in Fig. 13. The errors are 
+measured  against  a multiprecision  computation  of the weights  using 200 digits. (b) Relative  two-norm  of the error in solving  Poisson’s  equation  (16)using 
+RBF-HFD  formulas  as a function  of ε. The dashed  line marks the values of εwhere RBF-Direct  can be safely used to compute  the RBF-HFD  weights,  while 
+the solid line marks the values where RBF-RA  is required  to get an accurate  result. The results in both plots were obtained  using N=45 and  L =20.
+Appendix A. M ATLAB Code and examples
+This appendix  contains  ﬁrst the script for two examples,  followed  by the functions rbfhfd ,vvra, andpolyval2 . The 
+function vvra(standing  for vector-valued  rational  approximation)  implements  the general  algorithm  described  in Section 3. 
+The ﬁrst example  shows  how to use thevvrafunction  for RBF interpolation.  The output  of this example  is a plot showing  
+the maximum  difference  between  the interpolant  and the target  function  (13)as a function  of epsilon.  It also displays  
+the minimum  of these maximum  differences  and the corresponding  value of ε. These  numbers  are 2.82 ·10−7and 0.31, 
+respectively.  The second  example  shows  how to use thevvrafunction  for computing  RBF-HFD  weights.  The code uses the 
+standard  19 node compact  stencil  for the 3-D Laplacian [44]and shows  that the RBF-HFD  weights  in the ε→0 limit  are 
+the same (up to rounding  errors)  as the standard  polynomials  based  weights.  The output  of this example  is the relative  two 
+norm difference  between  and ﬂat limit RBF-HFD  weights  and the standard  weights.  This number  is 4.38 ·10−13.
+%% Example 1: Interpolation problem using GA kernel
+phi = @(e,r) exp(-(e *r).ˆ2); % Gaussian
+f = @(x,y) (1-(x.ˆ2+y.ˆ2)). *(sin(pi/2 *(y-0.07))-0.5 *cos(pi/2 *(x+0.1)));
+N = 60; hp = haltonset(2); y = 2 *net(hp,N)-1; % Nodes/centers
+M=2 *N; x = 3/2 *net(scramble(hp,’rr2’),M)-3/4; % Eval points
+epsilon = linspace(0,1,101);% Compute distances nodes/centers and eval points/centersD = @(x,y)hypot(bsxfun(@minus,x(:,1),y(:,1)’),bsxfun(@minus,x(:,2),y(:,2)’));ryy = D(y,y); rxy = D(x,y);
+% Determine the radius
+rad = fminbnd(@(e)norm(inv(phi(e,ryy)),inf) *norm(phi(1i *e,ryy),inf),0.1,20);
+ryy = ryy *rad; %
+ Re-scale the distances by the radius of the evaluation
+rxy = rxy *rad; % contour so that a unit radius can be used.
+% Compute the interpolant
+rbfinterp=@(ep) phi(ep,rxy) *(phi(ep,ryy) \f(y(:,1),y(:,2)));
+s = vvra(rbfinterp,epsilon/rad,1,64,64/4);
+% Compute the difference between s and f and plot the resultserror = max(abs(bsxfun(@minus,s,f(x(:,1),x(:,2)))));semilogy(epsilon,error, ’x-’)
+[minerr,pos] = min(error);
+fprintf(’Minimum
+ error: %1.2e, Epsion: %1.2f \n’,minerr,epsilon(pos));
+%% Example 2: RBF-HFD weights for the 3-D Laplacian using IQ kernel
+% Example for the standard 19 node stencil (6 implicit nodes) on lattice
+
+--- PAGE 17 ---
+G.B. Wright, B. Fornberg / Journal of Computational Physics 331 (2017) 137–156 153
+% Explicit nodes
+xhat = [[0,0,0];[-1,0,0];[1,0,0];[0,-1,0];[0,1,0];[0,0,-1];[0,0,1]; ...
+[0,-1,-1];[0,-1,1];[0,1,-1];[0,1,1];[-1,0,-1];[-1,0,1]; ...
+[1,0,-1];[1,0,1];[-1,-1,0];[-1,1,0];[1,-1,0];[1,1,0]];
+N = size(xhat,1);
+% Implicit nodes
+yhat = [[-1,0,0];[1,0,0];[0,-1,0];[0,1,0];[0,0,-1];[0,0,1]];
+plot3(xhat(:,1),xhat(:,2),xhat(:,3), ’o’,yhat(:,1),yhat(:,2),yhat(:,3), ’.’)
+% The IQ kernel and it’s 3-D Laplacian and 3-D bi-harmonic
+phi = @(e,r) 1./(1 + (e *r).ˆ2);
+dphi = @(e,r) 2 *eˆ2*(-3 + (e *r).ˆ2)./(1 + (e *r).ˆ2).ˆ3;
+d2phi = @(e,r) 24 *eˆ4*(5 + (e *r).ˆ2. *(-10 + (e *r).ˆ2))./(1 + (e *r).ˆ2).ˆ5;
+% Compute the radius
+rad = fzero(@(e)log10(cond(rbfhfd(e,xhat,yhat,phi,dphi,d2phi,1)))-6,[0.05,1]);
+r = sqrt(D(xhat,xhat).ˆ2 + bsxfun(@minus,xhat(:,3),xhat(:,3)’).ˆ2);
+rad = min(rad,0.95/max(r(:)));
+% Re-scale the stencil nodes so that a unit evaluation radius can be used.
+xhat = rad *xhat; yhat = rad *yhat;
+% Compute the weights at various epsilon
+epsilon = linspace(0,rad,11);
+w = vvra(@rbfhfd,epsilon/rad,1,64,64/4,xhat,yhat,phi,dphi,d2phi);
+% Undo the effects of re-scaling from the weights
+w(1:size(xhat,1),:) = w(1:size(xhat,1),:) *radˆ2;
+% Compare the flat limit weights (epsilon=0) to the standard weights
+ws = [-8,2/3 *ones(1,6),ones(1,12)/3,-ones(1,6)/6]’; % standard weights
+fprintf( ’Relative two norm difference: %1.2e \n’,norm(w(:,1)-ws)/norm(ws));
+function w = rbfhfd(ep,x,xh,phi,dphi,d2phi,flag)
+%RBFHFD Computes the RBF-HFD weights for the 3-D Laplacian.
+%
+% w = rbfhfd(Epsilon,X,Xh,Phi,DPhi,D2Phi) computes the RBF-HFD weights
+% at the given value of Epsilon and at the explicit stencil nodes X and
+% implicit (Hermite) stencil nodes Xh. Phi is a function handle for
+% computing the kernel phi(ep,r) used for generating the weights (e.g.
+% the Gaussian or inverse quadratic). Dphi and D2phi are function
+% handles for computing the 3-D Laplacian and bi-harmonic of Phi,
+% respectively.
+%
+% A = rbfhfd(Epsilon,X,Xh,Phi,DPhi,D2Phi,flag) returns the matrix for
+% computing the weights if the flag is non-zero, otherwise it returns
+% just the weights as described above.
+ifnargin == 6
+flag = 0; % Return on the weights
+end
+N = size(x,1);
+x = [x;xh];
+ov = ones(1,size(x,1));
+% Compute the pairwise distances
+r = sqrt((x(:,1) *ov-(x(:,1) *ov).’).ˆ2 + (x(:,2) *ov-(x(:,2) *ov).’).ˆ2 + ...
+(x(:,3) *ov-(x(:,3) *ov).’).ˆ2);
+temp = dphi(ep,r(1:N,N+1:end)); % Construct the weight matrix
+A = [[phi(ep,r(1:N,1:N)) temp];[temp.’ d2phi(ep,r(N+1: end,N+1:end))]];
+% Determine what needs to be returned.
+ifflag == 0
+w=A \[dphi(ep,r(1:N,1));d2phi(ep,r(N+1: end,1))];
+else
+w=A ;
+end
+end % end rbfhfd
+
+--- PAGE 18 ---
+154 G.B. Wright, B. Fornberg / Journal of Computational Physics 331 (2017) 137–156
+function [R,b] = vvra(myfun,epsilon,rad,K,n,varargin)
+%VVRA Vector-valued rational approximation (VVRA) valid near the
+% origin to a vector-valued analytic function.
+%
+% [R,b] = vvra(myfun,Epsilon,Rad,K,n) generates a vector-valued rational
+% approximation to the vector-valued analytic function represented by
+% myfun and evaluates it at the values in Epsilon. The inputs are
+% described as follows:
+%
+% myfun is a function handle that, given a value of epsilon returns a
+% column vector corresponding to each component of the function
+% evaluated at epsilon.
+%
+% Epsilon is an array of values such that |Epsilon|<=Rad where the
+% rational approximation is to be evaluated.
+%
+% Rad is a scalar representing the radius of the circle centered at
+% the origin where it is numerically safe to evaluate myfun.
+%
+% K is the number of points to evaluate myfun at on the contour for
+% constructing the rational approximation. This number should be even.
+%
+% 2n is the degree of the common denominator to use in the
+% approximation.
+%
+% The columns in the output R represent the approximation to the
+% components of myfun at each value in the array Epsilon. The optional
+% output b contains the coefficients of the common denominator of the
+% vector-valued rational approximation.
+%
+% [R,b] = vvra(myfun,Epsilon,Rad,K,n,T1,T2,...) is the same as above, but
+% passes the optional arguments T1, T2, etc. to myfun, i.e.,
+% feval(myfun,epsilon,T1,T2,...).
+K = K+mod(K,2); % Force K to be even
+ang = pi/2 *linspace(0,1,K+1)’; ang = ang(2:2:K);
+ei = rad *exp(1i *ang); % The evaluation points (all in first quadrant)
+m = K-n; % Fix the degree of the numerator based on K and n
+W = feval(myfun,ei(1),varargin{:});
+M = numel(W);
+fv = zeros(K/2,1,M);
+fv(1,1,:) = W;
+for k = 2:K/2 % Loop over the evaluation points for F
+W = feval(myfun,ei(k),varargin{:});
+fv(k,1,:) = W;
+end
+fmax = max(abs(fv),[],3); % Find largest magnitude component for each k
+e = ei.ˆ2; % Calculate the E matrix
+E = e(:,ones(1,m)); E(:,1) = 1./fmax; E = cumprod(E,2); % Scaled E-matrix
+f = E(:,1:n+1); % Create the F-matrices and RHS
+F = f(:,:,ones(1,M)). *fv(:,ones(1,n+1),:);
+g = F(:,1,:);
+F = -F(:,2:n+1,:);
+ER = [real(E);imag(E)]; % Separate E and F and the RHS g into real parts on
+FR = [real(F);imag(F)]; % top, and then the imag parts below
+gr = [real(g);imag(g)];
+[Q,R] = qr(ER); QT = Q’; % Factorize ER into Q *R
+R = R(1:m,:); % Remove bottom block of zeros from R
+for k = 1:M % Update all FR matrices
+FR(:,:,k) = QT *FR(:,:,k);
+gr(:,1,k) = QT *gr(:,1,k);
+end
+
+--- PAGE 19 ---
+G.B. Wright, B. Fornberg / Journal of Computational Physics 331 (2017) 137–156 155
+FT = FR(1:m,:,:); % Separate F-blocks and g-blocks to the systems for
+FB = FR(m+1:K,:,:); % determining the numerator and denominator coeffs.
+gt = gr(1:m,:,:);
+gb = gr(m+1:K,:,:);
+% Reshape these to be 2-D matrices
+FT = permute(FT,[1,3,2]); FT = reshape(FT,M *m,n);
+FB = permute(FB,[1,3,2]); FB = reshape(FB,M *(K-m),n);
+gt = permute(gt,[1,3,2]); gt = reshape(gt,M *m,1);
+gb = permute(gb,[1,3,2]); gb = reshape(gb,M *(K-m),1);
+b=F B \gb; % Obtain the coefficients of the denominator
+v = gt-FT *b; V = reshape(v,m,M);
+a=( R \V); % Obtain the coefficients of the numerators
+% Evaluate the rational approximations
+R = zeros(M,length(epsilon));
+b = [1;b];
+denomval = polyval2(b,epsilon);
+for ii = 1:M
+R(ii,:) = (polyval2(a(:,ii),epsilon)./denomval);
+end
+end % End vvra
+function y = polyval2(p,x)
+%POLYVAL2 Evaluates the even polynomial
+% Y = P(1) + P(2) *Xˆ2 + ... + P(N) *Xˆ(2(N-1)) + P(N+1) *Xˆ2N
+% If X is a matrix or vector, the polynomial is evaluated at all
+% points in X (this is unlike the polyval function of matlab)
+y = zeros(size(x)); x = x.ˆ2;
+for j=length(p):-1:1
+y=x . *y + p(j);
+end
+end % End polyval2
+Appendix B.  Choosing  the radius  εRof the evaluation  contour
+We propose  two different  strategies  for choosing  the radius  εRdepending  on the type of kernel  being used in the 
+application.  As discussed  in Section 4.1, entire  positive  deﬁnite  kernels,  like GA, grow without  bound  as one moves  out 
+in the complex  plane away from the real ε-axis. This growth  limits  the radius  of the contour.  The strategy  we propose  
+for entire  kernels  is to choose  εRbased  on an estimate  of where  the ill-conditioning  from the interpolation  problem  is 
+overtaken  by ill-conditioning  from the growth  of the kernel  on the imaginary  ε-axis. Such an estimate  is diﬃcult  to make 
+from the condition  number  of the interpolation  or RBF-FD/HFD  weight  matrix  A(ε)because  of singularities  that can occur in 
+A(ε)−1for imaginary  ε(cf. Fig. 6). Instead,  we have found  that a good measure  for the ill-conditioning  that is not effected  
+by singularities  when ε=iβ(β∈R) is
+/tildewideσ∞(A(β))=/bardblA(iβ)/bardbl∞/bardblA(β)−1/bardbl∞.
+The ﬁrst factor  on the right of this expression  captures  the growth  from the kernel,  while the second  factor  captures  the 
+ill-conditioning  from the interpolation  problem  (since  this is just the standard  interpolation  matrix  for real shape  param-
+eters).  To ﬁnd where  the transition  between  the types of ill-conditioning  occurs,  we thus set εRequal to an approximate  
+minimum  of log/tildewideσ∞(A(β)). This is the approach  used in the interpolation  example  in the ﬁrst appendix.
+As discussed  in Section 4.1, kernels  that have singular  points,  such as IQ, IMQ, and MQ, will lead to a multitude  of 
+singular  points  in the RBF vector-valued  rational  function,  as each entry of A(ε)will have two singular  points.  The evaluation  
+contour  that is used should  altogether  avoid these singular  points.  The closest  singular  points  that comes  directly  from the 
+kernels  is located  on the positive  and negative  imaginary  axis at the inverse  of the largest  distance  between  the nodes.  The 
+radius  εRthus needs  to be chosen  smaller  than this value.  In our applications  we have used
+εR=0.95/parenleftbigg
+max
+1≤i,j,≤N/bardblˆxi−ˆxj/bardbl/parenrightbigg−1
+, (B.1)
+where  {ˆxi}N
+i=1are the interpolation  (or RBF-FD  stencil)  nodes.  For smaller  problems,  we have found  that this sometimes  
+results  in a radius  that is larger  than necessary  to achieve  accurate  results.  In these cases we often ﬁnd it is better  to use a 
+smaller  radius,  which  in turn allows  the number  of evaluation  points  Kto be smaller  without  diminishing  the accuracy.  To 
+address  this issue, we choose  εRto be the minimum  between  (B.1)and the approximate  real value of εwhere  the condition  
+number  of A(ε)is equal to 106. This is the approach  used in the RBF-HFD  example  in the ﬁrst appendix.
+
+--- PAGE 20 ---
+156 G.B. Wright, B. Fornberg / Journal of Computational Physics 331 (2017) 137–156
+References
+[1]B. Fornberg,  C. Piret, On choosing  a radial basis function  and a shape parameter  when solving  a convective  PDE on a sphere,  J. Comput.  Phys. 227 
+(2008) 2758–2780.
+[2]E. Larsson,  B. Fornberg,  A numerical  study of some radial basis function  based solution  methods  for elliptic PDEs, Comput.  Math. Appl. 46 (2003) 
+891–902.
+[3]R. Schaback,  Error estimates  and condition  numbers  for radial basis function  interpolants,  Adv. Comput.  Math. 3 (1995) 251–264.
+[4]T. A.  Driscoll,  B. Fornberg,  Interpolation  in the limit of increasingly  ﬂat radial basis functions,  Comput.  Math. Appl. 43 (3) (2002) 413–422.
+[5]B. Fornberg,  G. Wright,  E. Larsson,  Some observations  regarding  interpolants  in the limit of ﬂat radial basis functions,  Comput.  Math. Appl. 47 (2004) 
+37–55.
+[6]E. Larsson,  B. Fornberg,  Theoretical  and computational  aspects  of multivariate  interpolation  with increasingly  ﬂat radial basis functions,  Comput.  Math. 
+Appl. 49 (2005) 103–130.
+[7]R. Schaback,  Multivariate  interpolation  by polynomials  and radial basis functions,  Constr. Approx.  21 (2005) 293–317.
+[8]B. Fornberg,  G. Wright,  Stable computation  of multiquadric  interpolants  for all values of the shape parameter,  Comput.  Math. Appl. 48 (2004) 853–867.
+[9]B. Fornberg,  E. Larsson,  N. Flyer, Stable computations  with Gaussian  radial basis functions,  SIAM J. Sci. Comput.  33 (2) (2011) 869–892.
+[10]B. Fornberg,  C. Piret, A stable algorithm  for ﬂat radial basis functions  on a sphere,  SIAM J. Sci. Comput.  30 (2007) 60–80.
+[11]G.E. Fasshauer,  M.J. McCourt,  Stable evaluation  of Gaussian  radial basis function  interpolants,  SIAM J. Sci. Comput.  34 (2012) A737–A762.
+[12]B. Fornberg,  E. Lehto, C. Powell,  Stable calculation  of Gaussian-based  RBF-FD  stencils,  Comput.  Math. Appl. 65 (2013) 627–637.
+[13]G.B. Wright,  B. Fornberg,  Scattered  node compact  ﬁnite difference-type  formulas  generated  from radial basis functions,  J. Comput.  Phys. 212 (1)  (2006) 
+99–123.
+[14]B. Fornberg,  N. Flyer, A Primer on Radial Basis Functions  with Applications  to the Geosciences,  SIAM, Philadelphia,  2015.
+[15]B. Fornberg,  E. Lehto, Stabilization  of RBF-generated  ﬁnite difference  methods  for convective  PDEs, J. Comput.  Phys. 230 (2011) 2270–2285.
+[16]Y .V.S.S.  Sanyasiraju,  G. Chandhini,  Local radial basis function  based grid free scheme  for unsteady  incompressible  viscous  ﬂows, J. Comput.  Phys. 227 
+(2008) 99–113.
+[17]C. Shu, H. Ding, K.S. Yeo, Local radial basis function-based  differential  quadrature  method  and its application  to solve two-dimensional  incompressible  
+Navier–Stokes  equations,  Comput.  Methods  Appl. Mech. Eng. 192 (7)  (2003) 941–954.
+[18]D. Stevens,  H. Power, M. Lees, H. Morvan,  The use of PDE centers  in the local RBF Hermitean  method  for 3D convective-diffusion  problems,  J. Comput.  
+Phys. 228 (2009) 4606–4624.
+[19]N. Flyer, E. Lehto, S. Blaise, G.B. Wright,  A. St-Cyr, A guide to RBF-generated  ﬁnite differences  for nonlinear  transport:  shallow  water simulations  on a 
+sphere,  J. Comput.  Phys. 231 (2012) 4078–4095.
+[20]V. Shankar,  G.B. Wright,  R.M. Kirby, A.L. Fogelson,  A radial basis function  (RBF)-ﬁnite  difference  (FD) method  for diffusion  and reaction–diffusion  
+equations  on surfaces,  J. Sci. Comput.  63 (3) (2014) 745–768.
+[21]N. Flyer, G.B. Wright,  B. Fornberg,  Radial basis function-generated  ﬁnite differences:  a mesh-free  method  for computational  geosciences,  in: W. Freeden,  
+M.Z. Nashed,  T. Sonar (Eds.), Handbook  of Geomathematics,  2nd edition,  Springer-Verlag,  Berlin, 2014, pp. 1–30.
+[22]B. Fornberg,  N. Flyer, Solving  PDEs with radial basis functions,  Acta Numer.  24 (2015) 215–258.
+[23]A. I.  Tolstykh,  D.A. Shirobokov,  On using radial basis functions  in a ﬁnite difference  mode with applications  to elasticity  problems,  Comput.  Mech. 33 (1) 
+(2003) 68–79.
+[24]J.G. Wang, G.R. Liu, A point interpolation  meshless  method  based on radial basis functions,  Int. J. Numer.  Methods  Eng. 54 (2002) 1623–1648.
+[25]H. Wendland,  Fast evaluation  of radial basis functions:  methods  based on partition  of unity, in: C.K. Chui, J.S.L.L. Schumaker  (Eds.), Approximation  
+Theory X: Wavelets,  Splines,  and Applications,  Vanderbilt  University  Press, Nashville,  TN, 2002, pp. 473–483.
+[26]A. Safdari-Vaighani,  A. Heryudono,  E. Larsson,  A radial basis function  partition  of unity collocation  method  for convection–diffusion  equations  arising 
+in ﬁnancial  applications,  J. Sci. Comput.  64 (2) (2015) 341–367.
+[27]V. Shcherbakov,  E. Larsson,  Radial basis function  partition  of unity methods  for pricing vanilla basket options,  Comput.  Math. Appl. 71 (1) (2016) 
+185–200.
+[28]R. Cavoretto,  A. De Rossi, E. Perracchione,  Partition  of unity interpolation  on multivariate  convex domains,  Int. J. Model. Simul. Sci. Comput.  06 (04)  
+(2015) 1550034.
+[29]J. Li, Y.C. Hon, Domain  decomposition  for radial basis meshless  methods,  Numer.  Methods  Partial Differ. Equ. 20 (2004) 450–462.
+[30]X. Zhou, Y. Hon, J. Li, Overlapping  domain  decomposition  method  by radial basis functions,  Appl. Numer.  Math. 44 (2003) 241–255.
+[31]N. Flyer, B. Fornberg,  V. Bayona,  G.A. Barnett,  On the role of polynomials  in RBF-FD  approximations  I. Interpolation  and accuracy,  J. Comput.  Phys. 321 
+(2016) 21–38.
+[32]E. Fuselier,  Sobolev-type  approximation  rates for divergence-free  and curl-free  RBF interpolants,  Math. Comput.  77 (2008) 1407–1423.
+[33]B. Fornberg,  J. Zuev, The Runge phenomenon  and spatially  variable  shape parameters  in RBF interpolation,  Comput.  Math. Appl. 54 (2007) 379–398.
+[34]V. Maz’ya,  G. Schmidt,  On approximate  approximations  using Gaussian  kernels,  IMA J. Numer.  Anal. 16 (1996) 13–29.
+[35]J.P .  Boyd, Error saturation  in Gaussian  radial basis functions  on a ﬁnite interval,  J. Comput.  Appl. Math. 234 (2010) 1435–1441.
+[36]G.E. Fasshauer,  Meshfree  Approximation  Methods  with MATLAB,  Interdiscip.  Math. Sci., vol. 6, World Scientiﬁc  Publishers,  Singapore,  2007.
+[37]B. Fornberg,  Fast calculation  of Laurent  expansions  for matrix inverses,  J. Comput.  Phys. 326 (2016) 722–732.
+[38]Z. Wu, Hermite–Birkhoff  interpolation  of scattered  data by radial basis functions,  Approx.  Theory Appl. 8( 2 ) (1992) 1–10.
+[39] Advanpix  multiprecision  computing  toolbox  for MATLAB,  http://www.advanpix.com/,  version  3.9.1.
+[40]P. Gonnet,  R. Pachón,  L.N. Trefethen,  Robust rational  interpolation  and least-squares,  Electron.  Trans. Numer.  Anal. 38 (2011) 146–167.
+[41]M. Froissart,  Approximation  de Padé: application  á la physique  des particules  élémentaires,  RCP Programme  9 (25) (1969) 1–13, CNRS, Strasbourg.
+[42]B. Beckermann,  A.C. Matos, Algebraic  properties  of robust Padé approximants,  J. Approx.  Theory 190 (2015) 91–115.
+[43]S.V. Borodachov,  D.P. Hardin,  E.B. Saff, Low complexity  methods  for discretizing  manifolds  via Riesz energy minimization,  Found. Comput.  Math. 14 (6) 
+(2014) 1173–1208.
+[44]W. F.  Spotz, G.F. Carey, A high-order  compact  formulation  for the 3D Poisson  equation,  Numer.  Methods  Partial Differ. Equ. 12 (1996) 235–243.
+
