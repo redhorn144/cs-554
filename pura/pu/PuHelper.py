@@ -2,6 +2,7 @@
 import random
 import numpy as np
 from scipy.spatial import cKDTree
+from scipy.sparse.linalg import LinearOperator, gmres
 
 def GenCenters(nodes, nodes_in_patch, overlap):
     P = overlap*nodes.shape[0]//nodes_in_patch
@@ -174,6 +175,89 @@ def ApplyLap(u, nodes, patches, centers, radii, grads, laps):
 
     return Lapu
 
+def SolvePoissonGMRES(
+    rhs,
+    nodes,
+    patches,
+    centers,
+    radii,
+    grads,
+    laps,
+    boundary_idx=None,
+    boundary_values=0.0,
+    x0=None,
+    use_negative_laplacian=True,
+    rtol=1e-8,
+    atol=0.0,
+    restart=None,
+    maxiter=None,
+):
+    rhs = np.asarray(rhs, dtype=float)
+    n = len(nodes)
+
+    if rhs.shape != (n,):
+        raise ValueError(f"rhs must have shape ({n},), got {rhs.shape}")
+
+    if boundary_idx is None:
+        boundary_idx = np.array([], dtype=int)
+    else:
+        boundary_idx = np.asarray(boundary_idx, dtype=int)
+
+    if np.isscalar(boundary_values):
+        boundary_values_vec = np.full(boundary_idx.shape, float(boundary_values))
+    else:
+        boundary_values_vec = np.asarray(boundary_values, dtype=float)
+        if boundary_values_vec.shape != boundary_idx.shape:
+            raise ValueError(
+                f"boundary_values must be scalar or shape {boundary_idx.shape}, got {boundary_values_vec.shape}"
+            )
+
+    b = rhs.copy()
+    if boundary_idx.size > 0:
+        b[boundary_idx] = boundary_values_vec
+
+    sign = -1.0 if use_negative_laplacian else 1.0
+
+    def matvec(u):
+        Au = sign * ApplyLap(u, nodes, patches, centers, radii, grads, laps)
+        if boundary_idx.size > 0:
+            Au[boundary_idx] = u[boundary_idx]
+        return Au
+
+    A = LinearOperator((n, n), matvec=matvec, dtype=float)
+    residual_history = []
+
+    def _callback(residual):
+        if np.isscalar(residual):
+            residual_history.append(float(residual))
+        else:
+            residual_history.append(float(np.linalg.norm(residual)))
+
+    try:
+        u, info = gmres(
+            A,
+            b,
+            x0=x0,
+            rtol=rtol,
+            atol=atol,
+            restart=restart,
+            maxiter=maxiter,
+            callback=_callback,
+            callback_type="pr_norm",
+        )
+    except TypeError:
+        u, info = gmres(
+            A,
+            b,
+            x0=x0,
+            tol=rtol,
+            restart=restart,
+            maxiter=maxiter,
+            callback=_callback,
+        )
+
+    return u, info, np.array(residual_history)
+
 def C2Weight(x, center, radius):
     r = np.linalg.norm(x - center)/radius
     return (1 - r)**4 * (4*r + 1)
@@ -198,3 +282,4 @@ def C2WeightLaplacian(x, center, radius):
     psi_d = -20 * (1 - rho)**3 * rho 
     psi_dd = 20*(1 - rho)**2 *(4*rho - 1)
     return (psi_dd + (d - 1) * psi_d / rho) / radius**2
+
