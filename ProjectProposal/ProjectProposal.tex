@@ -1,0 +1,59 @@
+\documentclass{article}
+\usepackage{graphicx} % Required for inserting images
+\usepackage{amsmath}
+
+\title{CS 554 - Project Proposal}
+\author{Alex Shaffer: aws9 }
+\date{febuary 2026}
+
+\begin{document}
+
+\maketitle
+
+\section*{Overview}
+This project is an implementation and analysis project for a combination of two radial basis function (RBF) methods. 
+These are the RBF partition of unity method (RBF-PU) and the RBF rational approximantion method (RBF-RA). 
+These methods both provide oppertunities for parallel gains which will be explored and unitlized in this project.
+The key idea of RBF methods is to represent a function or solution to a PDE as a linear combination of radial basis function centered on nodes.
+
+\[
+u(x) = \sum_i^N \lambda_i \varphi(||x-x_i||)
+\]
+
+\section*{Motivation}
+RBF methods have some useful properties that make them desirable for interpolation and collocation methods.
+Due to the Mairhuber-Curtis theorem (CITATION HERE), RBF methods are provably the only interpolation methods that can be used on arbitrary nodes in higher dimensions.
+Additionally, the Gaussian RBF exhibits spectral convergence, meaning that the error decreases faster than any polynomial as the number of nodes increases.
+
+\[
+\text{Gaussian Kernel}: \varphi(r) = e^{-\epsilon r^2}
+\]
+
+There are considerable challenges to using RBF methods with the niave direct method.
+The traditional approach suffers from ill-conditioning and high computational cost from dense linear solves as the number of nodes increases.
+
+\subsection*{RBF-PU}
+The RBF-PU method decomposes the domain into a set of overlapping patches and constructs local RBF interpolants on each patch. 
+These patches are blended smoothly together using a partition of unity to create a global interpolant.
+The global interpolant is given by:
+\[
+u(x) = \sum_{j=1}^M w_j(x) u_j(x)
+\]
+where $w_j(x)$ are the partition of unity weights and $u_j(x)$ are the local RBF interpolants on each patch.
+The upshot is that for for patches that do not contain $x$, the corresponding weight $w_j(x)$ is zero. 
+This adds a degree of sparsity to the system and allows for parallelization across patches.
+A key step in solving PDEs with an iterative solver like GMRES is the application of the operator to a vector, which can be done in parallel across patches.
+While the RBF-PU method helps the conditioning, due to improved conditioning on small patches, it does not fully resolve the issue of ill-conditioning as the number of nodes increases.
+
+\subsection*{RBF-RA}
+The RBF-RA method is a recent technique used for stabalization of RBF methods.
+With the Gaussian RBF, spectral accuracy is achieved as the shape parameter $\epsilon$ approaches zero, but this also leads to ill-conditioning, because the RBFs become increasingly flat and linearly dependent.
+The key idea of the RBF-RA method is to construct a rational approximation to the RBF interpolant, which can be evaluated stably even for small shape parameters.
+This is done by solving many RBF interpolation problems for different values of $\epsilon$ on a safe contour in the complex plane.
+A least squares problem is then solved to find the coefficients of the rational approximation, which can be evaluated stably for small $\epsilon$.
+
+This method provides an oppertunity for parallelization across the different interpolation problems and the large least square problem, which has exploitable sparsity.
+
+
+
+\end{document}
