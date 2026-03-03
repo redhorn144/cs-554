@@ -13,7 +13,6 @@ def SetupPatches(nodes, nodes_per_patch, overlap = 3):
 
     return centers, radii, patch_node_inds
 
-
 ###################################
 # Helper function to generate the patches and their associated data
 ###################################
