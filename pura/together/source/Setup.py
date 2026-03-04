@@ -1,9 +1,12 @@
 from BaseHelpers import *
 from Patch import Patch
 from scipy.spatial import cKDTree
+from RAHelpers import StableFlatMatrices
+from mpi4py import MPI
+from PUWeights import NormalizeWeights
 
 ###################################
-#
+# General setup function to create patches, compute their matrices, and normalize weights
 ###################################
 def Setup(comm, nodes, nodes_per_patch, overlap = 3):
     rank = comm.Get_rank()
@@ -22,20 +25,23 @@ def Setup(comm, nodes, nodes_per_patch, overlap = 3):
     num_patches = len(centers)
     patches_for_rank = [i for i in range(num_patches) if i % comm.Get_size() == rank]
 
-    print(f"Rank {rank} assigned {len(patches_for_rank)} patches: {patches_for_rank}")
+    patches = []
+    for i in patches_for_rank:
+        patch_nodes = nodes[patch_node_inds[i]]
+        patch_center = centers[i]
+        patch_radius = radii[i]
+        patch_nodes_indices = patch_node_inds[i]
+        Patch_Phi, Patch_D, Patch_L = StableFlatMatrices(patch_nodes)
+        patch = Patch(center=patch_center, radius=patch_radius, node_indices=patch_nodes_indices, 
+                        nodes=patch_nodes, Phi=Patch_Phi, D=Patch_D, L=Patch_L, w_bar=None, gw_bar=None, lw_bar=None)
+        patches.append(patch)
+    
+    # Normalize PU weights across all ranks
+    NormalizeWeights(comm, patches, patches_for_rank, nodes)
 
-patches = []
-for i in patches_for_rank:
-    patch_nodes = nodes[patch_node_inds[i]]
-    patch_center = centers[i]
-    patch_radius = radii[i]
-    patch_nodes_indices = patch_node_inds[i]
-    Patch_Phi, Patch_D, Patch_L = StableFlatMatrices(patch_nodes)
-    patch = Patch(center=patch_center, radius=patch_radius, node_indices=patch_nodes_indices, 
-                    nodes=patch_nodes, Phi=Patch_Phi, D=Patch_D, L=Patch_L)
-    patches.append(patch)
-
-print(f"Rank {rank} finished setting up its patches.")
+    print(f"Rank {rank} has {len(patches)} patches.")
+    
+    return patches, patches_for_rank
 
 
 
