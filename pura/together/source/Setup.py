@@ -2,6 +2,43 @@ from BaseHelpers import *
 from Patch import Patch
 from scipy.spatial import cKDTree
 
+###################################
+#
+###################################
+def Setup(comm, nodes, nodes_per_patch, overlap = 3):
+    rank = comm.Get_rank()
+    
+    if rank == 0:
+        centers, radii, patch_node_inds = SetupPatches(nodes, 50, overlap=3)
+    else:
+        centers = None
+        radii = None
+        patch_node_inds = None
+
+    centers = comm.bcast(centers, root=0)
+    radii = comm.bcast(radii, root=0)
+    patch_node_inds = comm.bcast(patch_node_inds, root=0)
+
+    num_patches = len(centers)
+    patches_for_rank = [i for i in range(num_patches) if i % comm.Get_size() == rank]
+
+    print(f"Rank {rank} assigned {len(patches_for_rank)} patches: {patches_for_rank}")
+
+patches = []
+for i in patches_for_rank:
+    patch_nodes = nodes[patch_node_inds[i]]
+    patch_center = centers[i]
+    patch_radius = radii[i]
+    patch_nodes_indices = patch_node_inds[i]
+    Patch_Phi, Patch_D, Patch_L = StableFlatMatrices(patch_nodes)
+    patch = Patch(center=patch_center, radius=patch_radius, node_indices=patch_nodes_indices, 
+                    nodes=patch_nodes, Phi=Patch_Phi, D=Patch_D, L=Patch_L)
+    patches.append(patch)
+
+print(f"Rank {rank} finished setting up its patches.")
+
+
+
 ####################################
 #SetupPatches: called on rank zero to generate the patches and distribute to other ranks
 ####################################
