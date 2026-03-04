@@ -14,6 +14,8 @@ def PoissonSquareOne(r):
 
     nodes = np.vstack((interior_nodes, boundary_nodes))
     normals = np.vstack((normals[groups['interior']], normals[groups['boundary:all']]))
-    min_boundary_idx = len(interior_nodes)
 
-    return nodes, normals, min_boundary_idx
+    groups['interior'] = np.arange(len(interior_nodes))
+    groups['boundary:all'] = np.arange(len(interior_nodes), len(nodes))
+
+    return nodes, normals, groups

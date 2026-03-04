@@ -13,9 +13,7 @@ from mpi4py import MPI
 #####################################
 # Laplacian operator
 #####################################
-# ...existing code...
-
-def ApplyLap(comm, patches, N):
+def ApplyLap(comm, patches, N, boundary_groups, BCs):
     """
     Apply the PU Laplacian operator to a vector u.
     
@@ -43,9 +41,6 @@ def ApplyLap(comm, patches, N):
             idx = patch.node_indices
             u_local = u[idx]
 
-            # Interpolation: Phi_p u_p
-            interp = patch.Phi @ u_local
-
             # Gradient: D_p u_p, shape (n_local, d)
             grad = np.column_stack([D @ u_local for D in patch.D])
 
@@ -56,11 +51,22 @@ def ApplyLap(comm, patches, N):
             # w_bar * L u  +  2 * (gw_bar . grad u)  +  lw_bar * Phi u
             result_local[idx] += (patch.w_bar * lap_local
                                   + 2.0 * np.sum(patch.gw_bar * grad, axis=1)
-                                  + patch.lw_bar * interp)
+                                  + patch.lw_bar * u_local)
 
         # Allreduce to sum contributions from patches on other ranks
         result = np.zeros(N)
         comm.Allreduce(result_local, result)
+
+        # Enforce strong boundary conditions
+        for group_idx, bc_nodes in enumerate(boundary_groups):
+            bc_type = BCs[group_idx]
+
+            if bc_type == 'dirichlet':
+                result[bc_nodes] = u[bc_nodes]
+            else:
+                print(f"Warning: BC type '{bc_type}' not implemented. Defaulting to Dirichlet.")
+                result[bc_nodes] = u[bc_nodes]
+
 
         return result
 

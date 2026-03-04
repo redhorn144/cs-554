@@ -9,6 +9,7 @@ class Patch:
     radius: float               # support radius
     node_indices: np.ndarray    # (n_local,)     global indices of nodes in this patch
     nodes: np.ndarray           # (n_local, d)   local node coordinates
+    normals: np.ndarray         # (n_local, d)   normal vectors at local nodes
     Phi: np.ndarray             # (n_local, n_local) interpolation matrix
     D: np.ndarray               # (d, n_local, n_local) gradient matrices [D_x0, D_x1, ...]
     L: np.ndarray               # (n_local, n_local) Laplacian matrix
