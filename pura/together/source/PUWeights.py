@@ -5,12 +5,10 @@ def NormalizeWeights(comm, patches, patches_for_rank, nodes):
     N = nodes.shape[0]
     d = nodes.shape[1]
 
-    # Accumulators for this rank's contribution
     W_local = np.zeros(N)
     gradW_local = np.zeros((N, d))
     lapW_local = np.zeros(N)
 
-    # --- Phase 1: accumulate raw weights from this rank's patches ---
     for patch in patches:
         idx = patch.node_indices
         patch_nodes = nodes[idx]
@@ -23,7 +21,6 @@ def NormalizeWeights(comm, patches, patches_for_rank, nodes):
         gradW_local[idx] += gw
         lapW_local[idx] += lw
 
-    # --- Phase 2: allreduce to get global sums ---
     W = np.zeros_like(W_local)
     gradW = np.zeros_like(gradW_local)
     lapW = np.zeros_like(lapW_local)
@@ -32,7 +29,6 @@ def NormalizeWeights(comm, patches, patches_for_rank, nodes):
     comm.Allreduce(gradW_local, gradW)
     comm.Allreduce(lapW_local, lapW)
 
-    # --- Phase 3: normalize and store in each patch ---
     for patch in patches:
         idx = patch.node_indices
         patch_nodes = nodes[idx]
