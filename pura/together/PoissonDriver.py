@@ -35,7 +35,7 @@ rhs[bc_groups[0]] = 0.0
 print(f"Rank {rank} starting GMRES solve...")
 if rank == 0:
     t_start = MPI.Wtime()
-solution, num_iters = gmres(comm, Lap, rhs, tol=1e-6, restart=5, maxiter=1)
+solution, num_iters = gmres(comm, Lap, rhs, tol=1e-4, restart=30, maxiter=1)
 
 if rank == 0:
     t_end = MPI.Wtime()
