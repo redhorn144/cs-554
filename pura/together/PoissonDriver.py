@@ -34,9 +34,17 @@ rhs = -2*np.pi**2*np.sin(np.pi * nodes[:, 0]) * np.sin(np.pi * nodes[:, 1])
 rhs[bc_groups[0]] = 0.0
 
 print(f"Rank {rank} starting GMRES solve...")
-solution = gmres(comm, Lap, rhs, tol=1e-6, maxiter=1000)
+if rank == 0:
+    t_start = MPI.Wtime()
+solution, num_iters = gmres(comm, Lap, rhs, tol=1e-3, restart=100, maxiter=100)
 
 if rank == 0:
+    t_end = MPI.Wtime()
+    print(f"GMRES solve complete in {t_end - t_start:.2f} seconds.")
+    print(f"GMRES converged in {num_iters} iterations.")
     print("GMRES solve complete. ")
+    u_exact = np.sin(np.pi * nodes[:, 0]) * np.sin(np.pi * nodes[:, 1])
+    error = np.linalg.norm(solution - u_exact) / np.linalg.norm(u_exact)
+    print(f"Relative L2 error: {error:.2e}")
     PlotSolution(nodes, solution)
 

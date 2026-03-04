@@ -21,7 +21,14 @@ def gmres(comm, matvec, b, x0=None, tol=1e-6, restart=30, maxiter=None, precond=
     """
     
     x = x0 if x0 is not None else np.zeros_like(b)
-    
+    total_iters = 0
+
+    # Relative tolerance: ||r|| / ||b|| < tol
+    b_norm = distributed_norm(comm, b)
+    if b_norm == 0.0:
+        b_norm = 1.0
+    abs_tol = tol * b_norm
+
     for outer in range(maxiter):
         # --- Initial residual ---
         r = b - matvec(x)
@@ -29,16 +36,17 @@ def gmres(comm, matvec, b, x0=None, tol=1e-6, restart=30, maxiter=None, precond=
             r = precond(r)
         
         beta = distributed_norm(comm, r)
-        if beta < tol:
+        if beta < abs_tol:
             break
         
         # --- Arnoldi / GMRES inner loop ---
-        x, converged = gmres_cycle(comm, matvec, b, x, beta, restart, tol, precond)
-        
+        x, converged, iters = gmres_cycle(comm, matvec, b, x, beta, restart, abs_tol, precond)
+        total_iters += iters
+
         if converged:
             break
     
-    return x
+    return x, total_iters
 
 def gmres_cycle(comm, matvec, b, x, beta, m, tol, precond):
     """Single restart cycle — builds Krylov subspace of size m."""
@@ -103,7 +111,7 @@ def gmres_cycle(comm, matvec, b, x, beta, m, tol, precond):
         x = x + y[i] * V[i]
     
     converged = residual < tol
-    return x, converged
+    return x, converged, j + 1
 
 def apply_givens(cs, sn, v):
     """Apply Givens rotation to a 2-element vector."""
