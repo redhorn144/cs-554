@@ -1,5 +1,6 @@
 import numpy as np
 from mpi4py import MPI
+import matplotlib.pyplot as plt
 from nodes.SquareDomain import PoissonSquareOne
 from source.Patch import Patch
 from source.Setup import Setup
@@ -59,9 +60,30 @@ for j in range(N):
 
 if rank == 0:
     print("Computing eigenvalues...")
-    eigenvalues = np.linalg.eigvals(A_dense)
+    eigenvalues, eigenvectors = np.linalg.eig(A_dense)  
+    problem_eig = -2*np.pi**2
+    closest_idx = np.argmin(np.abs(eigenvalues - problem_eig))
+    closest_eig = eigenvalues[closest_idx]
+    print(f"Problem eigenvalue: {problem_eig:.4e}")
+    print(f"Closest computed eigenvalue: {closest_eig:.4e}")
+    print(f"Distance: {np.abs(closest_eig - problem_eig):.4e}")
 
-    import matplotlib.pyplot as plt
+    # Compute and plot the eigenvector associated with the closest eigenvalue
+    
+    closest_eigvec = np.real(eigenvectors[:, closest_idx])
+
+    from matplotlib.tri import Triangulation
+    tri = Triangulation(nodes[:, 0], nodes[:, 1])
+
+    fig_eig = plt.figure(figsize=(10, 8))
+    ax = fig_eig.add_subplot(111, projection='3d')
+    ax.plot_trisurf(tri, closest_eigvec, cmap='RdBu_r', edgecolor='none', antialiased=True)
+    ax.set_xlabel("x")
+    ax.set_ylabel("y")
+    ax.set_zlabel("Eigenvector value")
+    ax.set_title(f"Eigenvector for eigenvalue {closest_eig:.4e}")
+    plt.tight_layout()
+    plt.savefig("closest_eigenvector.png", dpi=150)
 
     fig, axes = plt.subplots(1, 2, figsize=(14, 5))
 
@@ -85,7 +107,7 @@ if rank == 0:
 
     plt.tight_layout()
     plt.savefig("laplacian_spectrum.png", dpi=150)
-    plt.show()
+    #plt.show()
 
     # Print conditioning info
     eig_abs = np.abs(eigenvalues)

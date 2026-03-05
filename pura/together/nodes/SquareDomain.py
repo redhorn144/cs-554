@@ -19,3 +19,4 @@ def PoissonSquareOne(r):
     groups['boundary:all'] = np.arange(len(interior_nodes), len(nodes))
 
     return nodes, normals, groups
+
