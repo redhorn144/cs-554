@@ -34,7 +34,7 @@ rhs[bc_groups[0]] = 0.0
 print(f"Rank {rank} starting GMRES solve...")
 if rank == 0:
     t_start = MPI.Wtime()
-solution, num_iters = gmres(comm, Lap, rhs, tol=1e-6, restart=300, maxiter=10)
+solution, num_iters = gmres(comm, Lap, rhs, tol=1e-4, restart=100, maxiter=10)
 
 if rank == 0:
     t_end = MPI.Wtime()
@@ -60,6 +60,7 @@ for j in range(N):
 
 if rank == 0:
     print("Computing eigenvalues...")
+<<<<<<< HEAD
     eigenvalues, eigenvectors = np.linalg.eig(A_dense)  
     problem_eig = -2*np.pi**2
     closest_idx = np.argmin(np.abs(eigenvalues - problem_eig))
@@ -67,6 +68,39 @@ if rank == 0:
     print(f"Problem eigenvalue: {problem_eig:.4e}")
     print(f"Closest computed eigenvalue: {closest_eig:.4e}")
     print(f"Distance: {np.abs(closest_eig - problem_eig):.4e}")
+=======
+    # The full matrix has identity rows at BC nodes, breaking symmetry.
+    # Restrict to interior nodes so the submatrix is the true symmetric Laplacian.
+    bc_nodes = bc_groups[0]
+    interior = np.setdiff1d(np.arange(N), bc_nodes)
+    A_interior = A_dense[np.ix_(interior, interior)]
+
+    # The PU collocation matrix is non-symmetric (Kansa method).
+    # Symmetrizing (A + A.T)/2 destroys the spectral structure — use eig directly.
+    raw_vals, raw_vecs = np.linalg.eig(A_interior)
+
+    # Eigenvalues are generally complex with small imaginary parts; keep real part.
+    # Determine sign convention: if median real part is negative, operator ≈ +Delta,
+    # so we negate to obtain eigenvalues of -Delta (which should be positive).
+    real_parts = raw_vals.real
+    if np.median(real_parts) < 0:
+        real_parts = -real_parts
+        print("Operator ≈ +Delta: negating eigenvalues to get -Delta")
+    else:
+        print("Operator ≈ -Delta: eigenvalues used as-is")
+
+    # Sort by ascending real part (lowest frequency first)
+    order = np.argsort(real_parts)
+    eigenvalues    = real_parts[order]
+    evecs_interior = raw_vecs[:, order].real
+
+    print(f"First 4 eigenvalues of -Delta: {eigenvalues[:4]}")
+    print(f"  (exact: 2pi^2={2*np.pi**2:.4f}, 5pi^2={5*np.pi**2:.4f}, 8pi^2={8*np.pi**2:.4f})")
+
+    # Pad eigenvectors back to full size (zero at boundary = Dirichlet BCs)
+    eigenvectors = np.zeros((N, len(eigenvalues)))
+    eigenvectors[interior, :] = evecs_interior
+>>>>>>> 5e43a85 (stage)
 
     # Compute and plot the eigenvector associated with the closest eigenvalue
     
@@ -87,32 +121,58 @@ if rank == 0:
 
     fig, axes = plt.subplots(1, 2, figsize=(14, 5))
 
-    # Plot eigenvalues in the complex plane
-    axes[0].scatter(eigenvalues.real, eigenvalues.imag, s=5, alpha=0.7)
-    axes[0].set_xlabel("Real part")
-    axes[0].set_ylabel("Imaginary part")
-    axes[0].set_title("Spectrum of the Laplacian operator")
+    # Plot eigenvalues (real, sorted ascending from eigh)
+    axes[0].scatter(np.arange(len(eigenvalues)), eigenvalues, s=5, alpha=0.7)
+    axes[0].set_xlabel("Index")
+    axes[0].set_ylabel("Eigenvalue of $-\\Delta$")
+    axes[0].set_title("Spectrum of $-\\Delta$ (interior nodes)")
     axes[0].axhline(0, color='k', linewidth=0.5)
-    axes[0].axvline(0, color='k', linewidth=0.5)
-    axes[0].set_aspect('equal')
     axes[0].grid(True, alpha=0.3)
 
-    # Plot sorted real parts (useful for understanding conditioning)
-    sorted_real = np.sort(eigenvalues.real)
-    axes[1].plot(sorted_real, 'o-', markersize=2)
+    # Plot sorted eigenvalues (log scale for conditioning view)
+    axes[1].plot(eigenvalues, 'o-', markersize=2)
     axes[1].set_xlabel("Index")
-    axes[1].set_ylabel("Eigenvalue (real part)")
-    axes[1].set_title("Sorted real parts of eigenvalues")
+    axes[1].set_ylabel("Eigenvalue of $-\\Delta$")
+    axes[1].set_title("Sorted eigenvalues of $-\\Delta$")
     axes[1].grid(True, alpha=0.3)
 
     plt.tight_layout()
     plt.savefig("laplacian_spectrum.png", dpi=150)
     #plt.show()
 
+    # --- Plot eigenvectors for the first 4 eigenvalues ---
+    # eigh already returns eigenvalues sorted ascending, so first 4 = lowest modes
+    from scipy.interpolate import griddata as _gd
+    from mpl_toolkits.mplot3d import Axes3D  # noqa: F401
+    fig2 = plt.figure(figsize=(14, 11))
+    x, y = nodes[:, 0], nodes[:, 1]
+    gx, gy = np.meshgrid(
+        np.linspace(x.min(), x.max(), 200),
+        np.linspace(y.min(), y.max(), 200),
+    )
+    for k in range(4):
+        evec = eigenvectors[:, k]  # already real from eigh
+        # Normalise sign: ensure the maximum absolute value is positive
+        if np.abs(evec.min()) > np.abs(evec.max()):
+            evec = -evec
+        lam = eigenvalues[k]
+        grid_v = _gd((x, y), evec, (gx, gy), method="cubic")
+        ax = fig2.add_subplot(2, 2, k + 1, projection="3d")
+        surf = ax.plot_surface(gx, gy, grid_v, cmap="RdBu_r", linewidth=0, antialiased=True)
+        fig2.colorbar(surf, ax=ax, shrink=0.5, pad=0.1)
+        ax.set_title(f"Mode {k+1}: $\\lambda = {lam:.4g}$")
+        ax.set_xlabel("x")
+        ax.set_ylabel("y")
+        ax.set_zlabel("$\\phi$")
+
+    fig2.suptitle("Eigenmodes of $-\\Delta$ (first 4, sorted by $\\lambda$ ascending)", fontsize=14)
+    fig2.tight_layout()
+    fig2.savefig("laplacian_eigenvectors.png", dpi=150, bbox_inches="tight")
+    plt.show()
+    print("Saved eigenvector plots to laplacian_eigenvectors.png")
+
     # Print conditioning info
-    eig_abs = np.abs(eigenvalues)
-    eig_abs_nonzero = eig_abs[eig_abs > 1e-12]
-    cond_estimate = np.max(eig_abs_nonzero) / np.min(eig_abs_nonzero)
-    print(f"Eigenvalue range: [{np.min(eigenvalues.real):.4e}, {np.max(eigenvalues.real):.4e}]")
+    eig_nonzero = eigenvalues[np.abs(eigenvalues) > 1e-12]
+    cond_estimate = np.max(np.abs(eig_nonzero)) / np.min(np.abs(eig_nonzero))
+    print(f"Eigenvalue range of -Delta: [{eigenvalues.min():.4e}, {eigenvalues.max():.4e}]")
     print(f"Spectral condition number estimate: {cond_estimate:.4e}")
-    print(f"Max imaginary component: {np.max(np.abs(eigenvalues.imag)):.4e}")

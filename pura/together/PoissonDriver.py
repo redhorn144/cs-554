@@ -28,6 +28,8 @@ BCs = np.array(["dirichlet"])
 bc_groups = np.array([groups['boundary:all']])
 Lap = ApplyLap(comm, patches, nodes.shape[0], bc_groups, BCs)
 
+
+
 #rhs = -2*np.pi**2*np.sin(np.pi * nodes[:, 0]) * np.sin(np.pi * nodes[:, 1])
 rhs = -8*np.pi**2*np.sin(2*np.pi * nodes[:, 0]) * np.sin(2*np.pi * nodes[:, 1])
 rhs[bc_groups[0]] = 0.0
@@ -35,7 +37,7 @@ rhs[bc_groups[0]] = 0.0
 print(f"Rank {rank} starting GMRES solve...")
 if rank == 0:
     t_start = MPI.Wtime()
-solution, num_iters = gmres(comm, Lap, rhs, tol=1e-4, restart=30, maxiter=1)
+solution, num_iters = gmres(comm, Lap, rhs, tol=1e-4, restart=100, maxiter=100)
 
 if rank == 0:
     t_end = MPI.Wtime()
