@@ -1,0 +1,17 @@
+\begin{thebibliography}{1}
+
+\bibitem{mirzaei2020directradialbasisfunction}
+Davoud Mirzaei.
+\newblock The direct radial basis function partition of unity (d-rbf-pu) method for solving pdes, 2020.
+
+\bibitem{Wendland_2004}
+Holger Wendland.
+\newblock {\em Scattered Data Approximation}.
+\newblock Cambridge Monographs on Applied and Computational Mathematics. Cambridge University Press, 2004.
+
+\bibitem{Wright_2017}
+Grady~B. Wright and Bengt Fornberg.
+\newblock Stable computations with flat radial basis functions using vector-valued rational approximations.
+\newblock {\em Journal of Computational Physics}, 331:137–156, February 2017.
+
+\end{thebibliography}
